@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, Plus, Loader2, MessageCircle, Search } from "lucide-react";
+import { Send, Plus, Loader2, MessageCircle, Search, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -461,37 +461,46 @@ export function DirectMessages() {
             </div>
 
             <div className="border-t border-border p-3">
-              {convoError && (
-                <p className="mb-2 text-xs text-red-500">{convoError}</p>
-              )}
-              <form
-                className="flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  sendMessage();
-                }}
-              >
-                <input
-                  value={input}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    if (convoError) setConvoError(null);
-                  }}
-                  placeholder={`Message ${active.recipient.username}...`}
-                  className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !input.trim()}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition hover:opacity-90 disabled:opacity-40"
-                >
-                  {sending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
+              {user?.restricted_at ? (
+                <p className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                  <EyeOff className="h-4 w-4 shrink-0" /> Your account is view-only —
+                  you can browse but not send messages.
+                </p>
+              ) : (
+                <>
+                  {convoError && (
+                    <p className="mb-2 text-xs text-red-500">{convoError}</p>
                   )}
-                </button>
-              </form>
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      sendMessage();
+                    }}
+                  >
+                    <input
+                      value={input}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        if (convoError) setConvoError(null);
+                      }}
+                      placeholder={`Message ${active.recipient.username}...`}
+                      className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sending || !input.trim()}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition hover:opacity-90 disabled:opacity-40"
+                    >
+                      {sending ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Send className="h-5 w-5" />
+                      )}
+                    </button>
+                  </form>
+                </>
+              )}
             </div>
           </>
         )}

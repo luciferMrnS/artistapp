@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Smile, Image as ImageIcon, Loader2, MessageCircle } from "lucide-react";
+import { Send, Smile, Image as ImageIcon, Loader2, MessageCircle, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
@@ -259,7 +259,14 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       </AnimatePresence>
 
 <div className="border-t border-border bg-zinc-900 p-3">
-        {uploadError && (
+        {user?.restricted_at ? (
+          <p className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+            <EyeOff className="h-4 w-4 shrink-0" /> Your account is view-only —
+            you can read but not post here.
+          </p>
+        ) : (
+        <>
+          {uploadError && (
           <p className="mb-2 px-1 text-xs text-red-400">{uploadError}</p>
         )}
         <div className="flex items-center gap-2">
@@ -293,9 +300,11 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                 className="rounded-full bg-primary p-2 text-white transition hover:opacity-80 disabled:opacity-50">
                 {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               </button>
-            </>
+</>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

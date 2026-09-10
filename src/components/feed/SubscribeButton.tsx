@@ -50,6 +50,9 @@ export function SubscribeButton({ artistId }: SubscribeButtonProps) {
 
   if (!showButton) return null;
 
+  // View-only accounts can't subscribe
+  if (user?.restricted_at) return null;
+
   const toggleSubscription = async () => {
     if (!artistId || isLoading) return;
 

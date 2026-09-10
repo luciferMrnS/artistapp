@@ -5,6 +5,7 @@ import {
   hasUserLikedPost,
   getLikesForPost,
   getPostById,
+  isUserRestricted,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -52,9 +53,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
+const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    if (await isUserRestricted(user.userId)) {
+      return NextResponse.json(
+        { error: "Your account is view-only" },
+        { status: 403 }
+      );
     }
 
     const { id: postId } = await params;
@@ -65,7 +73,7 @@ export async function POST(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    // Fans can only like — artist can also like others' posts (but there's only the artist)
+    // Fans can only like - artist can also like others' posts (but there's only the artist)
     // We allow any authenticated user to like
     const result = await likePost(postId, user.userId);
 

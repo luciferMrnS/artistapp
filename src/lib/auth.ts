@@ -14,6 +14,7 @@ export interface User {
   username: string;
   avatar: string;
   role: UserRole;
+  restricted_at?: string | null;
   createdAt: string;
 }
 

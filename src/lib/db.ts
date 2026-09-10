@@ -21,6 +21,7 @@ export interface StoredUser {
   role: UserRole;
   supabase_auth_id?: string | null;
   email_verified?: boolean;
+  restricted_at?: string | null;
   created_at: string;
 }
 
@@ -849,6 +850,85 @@ export async function downloadAvatarFile(
   return { data };
 }
 
+// ─── User Management (artist → fans) ──────────────────
+
+const SUPABASE_AVATAR_STORAGE_RE =
+  /^https:\/\/([a-z0-9-]+)\.supabase\.co\/storage\/v1\/object\/public\/avatars\/(.+)$/i;
+
+/**
+ * True when the user's account is currently set to view-only.
+ */
+export async function isUserRestricted(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("restricted_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  return Boolean((data as { restricted_at: string | null }).restricted_at);
+}
+
+/**
+ * Flip a user between normal access and view-only access.
+ */
+export async function setUserRestriction(
+  userId: string,
+  restricted: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ restricted_at: restricted ? new Date().toISOString() : null })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("Error updating restriction:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+/**
+ * Permanently remove a fan account.
+ * Deleting the users row cascades to their posts, comments, likes, follows,
+ * notifications, direct messages and community-chat messages (all reference
+ * users(id) ON DELETE CASCADE). Their uploaded avatar object is removed too.
+ */
+export async function deleteUserAccount(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const { data: user, error: fetchError } = await supabaseAdmin
+    .from("users")
+    .select("avatar")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("Error fetching user to delete:", fetchError);
+    return { success: false, error: fetchError.message };
+  }
+  if (!user) return { success: false, error: "User not found" };
+
+  // Best-effort: remove the user's own uploaded avatar file if there is one.
+  const match = (user as { avatar: string }).avatar.match(
+    SUPABASE_AVATAR_STORAGE_RE
+  );
+  if (match) {
+    await supabaseAdmin.storage.from(AVATARS_BUCKET).remove([match[2]]);
+  }
+
+  const { error } = await supabaseAdmin
+    .from("users")
+    .delete()
+    .eq("id", userId);
+
+  if (error) {
+    console.error("Error deleting user:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
 // ─── Theme Media ──────────────────────────────────────
 // Themed drop media (new-drop / behind-the-scenes / studio)
 // lives in a PUBLIC bucket so browser audio/video/photo
@@ -1559,6 +1639,7 @@ export interface SubscriberRow {
   email: string;
   avatar: string;
   email_verified: boolean;
+  restricted_at: string | null;
   subscribed_at: string;
 }
 
@@ -1570,6 +1651,7 @@ interface FollowSubscriberQuery {
     email: string;
     avatar: string;
     email_verified: boolean;
+    restricted_at: string | null;
   } | null;
 }
 
@@ -1590,7 +1672,8 @@ export async function getArtistFollowers(): Promise<SubscriberRow[]> {
         username,
         email,
         avatar,
-        email_verified
+        email_verified,
+        restricted_at
       )
     `)
     .eq("following_id", artist.id)
@@ -1611,6 +1694,7 @@ export async function getArtistFollowers(): Promise<SubscriberRow[]> {
       email: row.follower!.email,
       avatar: row.follower!.avatar,
       email_verified: row.follower!.email_verified,
+      restricted_at: row.follower!.restricted_at,
       subscribed_at: row.created_at,
     }));
 }

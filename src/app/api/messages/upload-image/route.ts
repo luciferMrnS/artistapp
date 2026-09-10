@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadCommunityImage, getCommunityImageUrl } from "@/lib/db";
+import { uploadCommunityImage, getCommunityImageUrl, isUserRestricted } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    if (await isUserRestricted(user.userId)) {
+      return NextResponse.json({ error: "Your account is view-only" }, { status: 403 });
+    }
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });

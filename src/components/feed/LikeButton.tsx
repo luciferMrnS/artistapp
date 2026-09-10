@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 interface LikeButtonProps {
   postId: string;
@@ -17,12 +18,14 @@ export function LikeButton({
   initialCount,
   onLikeChange,
 }: LikeButtonProps) {
+  const { user } = useAuth();
+  const viewOnly = Boolean(user?.restricted_at);
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const toggleLike = async () => {
-    if (isAnimating) return;
+    if (isAnimating || viewOnly) return;
     setIsAnimating(true);
 
     try {

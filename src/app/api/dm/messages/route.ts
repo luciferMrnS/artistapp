@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectMessages, sendDirectMessage } from "@/lib/db";
+import { getDirectMessages, sendDirectMessage, isUserRestricted } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 
 /**
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    if (await isUserRestricted(user.userId)) {
+      return NextResponse.json(
+        { error: "Your account is view-only" },
+        { status: 403 }
+      );
     }
 
     let body: { recipientId?: unknown; content?: unknown; mediaUrl?: unknown };
