@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface SubscribeButtonProps {
   /** The artist to subscribe to (hidden if missing or if it's the current user) */
@@ -20,6 +21,7 @@ interface SubscribeButtonProps {
  */
 export function SubscribeButton({ artistId }: SubscribeButtonProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [subscribed, setSubscribed] = useState(false);
   const [subscribers, setSubscribers] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +57,11 @@ export function SubscribeButton({ artistId }: SubscribeButtonProps) {
 
   const toggleSubscription = async () => {
     if (!artistId || isLoading) return;
+
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
 
     setIsLoading(true);
     try {

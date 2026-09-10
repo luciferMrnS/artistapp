@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface LikeButtonProps {
   postId: string;
@@ -19,6 +20,7 @@ export function LikeButton({
   onLikeChange,
 }: LikeButtonProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const viewOnly = Boolean(user?.restricted_at);
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
@@ -26,6 +28,11 @@ export function LikeButton({
 
   const toggleLike = async () => {
     if (isAnimating) return;
+
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
 
     if (viewOnly) {
       window.alert("You have limited access, try again later");
