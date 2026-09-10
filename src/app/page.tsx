@@ -126,7 +126,7 @@ function HomeContent({
   const engagementRate = computeEngagementRate(posts, followerCount);
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto flex max-w-[1500px]">
+      <div className="mx-auto flex max-w-[1500px] flex-col xl:flex-row">
         <Sidebar />
 
         <main className="ml-20 min-h-screen flex-1 border-x border-border xl:ml-64">
@@ -215,8 +215,8 @@ function HomeContent({
           </div>
         </main>
 
-        <aside className="hidden w-[330px] shrink-0 p-4 xl:block">
-          <div className="sticky top-6 space-y-5">
+        <aside className="ml-20 w-auto shrink-0 p-4 xl:ml-0 xl:w-[330px]">
+          <div className="space-y-5 xl:sticky xl:top-6">
             <div className="rounded-2xl border border-border bg-zinc-900 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Artist pulse</h3>
