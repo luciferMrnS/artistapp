@@ -11,15 +11,17 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { useFeed, type FeedPostData } from "@/components/feed/FeedContext";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB — must match the API
 
 interface CreatePostFormProps {
-  onPostCreated?: () => void;
+  onPostCreated?: (post: FeedPostData) => void;
 }
 
 export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
   const { user } = useAuth();
+  const feed = useFeed();
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [showImageInput, setShowImageInput] = useState(false);
@@ -118,9 +120,13 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
 
       setContent("");
       clearImage();
-      onPostCreated?.();
-      // Refresh the page to show the new post
-      window.location.reload();
+
+      const created = data?.post as FeedPostData | undefined;
+      if (created) {
+        // Prepend to the feed in place — no page reload.
+        feed?.prependPost(created);
+        onPostCreated?.(created);
+      }
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Post creation error:", err);

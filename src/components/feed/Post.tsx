@@ -5,6 +5,7 @@ import { Bookmark, MoreHorizontal } from "lucide-react";
 import { LikeButton } from "@/components/feed/LikeButton";
 import { CommentSection } from "@/components/feed/CommentSection";
 import { KebabMenu } from "@/components/ui/KebabMenu";
+import { Lightbox } from "@/components/ui/Lightbox";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 
@@ -40,6 +41,8 @@ export function Post({
   const [likes, setLikes] = useState(initialLikes);
   const [comments, setComments] = useState(initialComments);
   const [liked, setLiked] = useState(userLiked);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   const handleLikeChange = (newLiked: boolean, newCount: number) => {
     setLiked(newLiked);
@@ -57,13 +60,16 @@ export function Post({
         credentials: "include",
       });
       if (!res.ok) return false;
-      window.location.reload();
+      // Remove the post in place — no auto page reload.
+      setDeleted(true);
       return true;
     } catch (err) {
       console.error("Failed to delete post:", err);
       return false;
     }
   };
+
+  if (deleted) return null;
 
   return (
     <article className="border-b border-border py-4 w-full">
@@ -102,7 +108,12 @@ export function Post({
       {/* Media */}
       {image && (
         <div className="mb-3 px-0 sm:px-4">
-          <div className="rounded-xl overflow-hidden border border-border aspect-square bg-zinc-900 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            aria-label="Open image full screen"
+            className="block w-full cursor-zoom-in rounded-xl overflow-hidden border border-border aspect-square bg-zinc-900"
+          >
             <img
               src={image}
               alt="Post content"
@@ -111,7 +122,7 @@ export function Post({
                 (e.target as HTMLImageElement).src = `https://placehold.co/600x600/18181b/ffffff?text=Image+Placeholder`;
               }}
             />
-          </div>
+          </button>
         </div>
       )}
 
@@ -136,6 +147,10 @@ export function Post({
           </button>
         </div>
       </div>
+
+      {image && lightboxOpen && (
+        <Lightbox src={image} alt="Post content" onClose={() => setLightboxOpen(false)} />
+      )}
     </article>
   );
 }

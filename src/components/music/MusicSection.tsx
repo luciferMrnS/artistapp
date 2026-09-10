@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Disc3, Music2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -37,11 +37,24 @@ const VISIBLE_COUNT = 3;
 export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
   const { user } = useAuth();
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  const [localTracks, setLocalTracks] = useState<TrackListItem[]>(tracks);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   // Record each stream once per page session per track,
   // and only once the track has actually been played for 30s+.
   const recordedRef = useRef<Set<string>>(new Set());
+
+  // Re-fetch the track list so it stays in sync after uploads (no reload).
+  const refreshTracks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tracks", { credentials: "include" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { tracks?: TrackListItem[] };
+      if (Array.isArray(data.tracks)) setLocalTracks(data.tracks);
+    } catch (err) {
+      console.error("Failed to refresh tracks:", err);
+    }
+  }, []);
 
   const handlePlay = (_trackId: string) => {
     // Pause every other track so only one plays at a time
@@ -63,7 +76,7 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
     }).catch((err) => console.error("Failed to record stream:", err));
   };
 
-  const visibleTracks = showAll ? tracks : tracks.slice(0, VISIBLE_COUNT);
+  const visibleTracks = showAll ? localTracks : localTracks.slice(0, VISIBLE_COUNT);
 
   return (
     <div className="rounded-2xl border border-border bg-zinc-900 p-4">
@@ -72,9 +85,9 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
         <Disc3 className="h-4 w-4 animate-[spin_6s_linear_infinite] text-primary" />
       </div>
 
-      <TrackUploader />
+      <TrackUploader onUploaded={refreshTracks} />
 
-      {tracks.length === 0 ? (
+      {localTracks.length === 0 ? (
         <p className="rounded-xl bg-black/40 p-4 text-center text-sm text-secondary">
           {user?.role === "artist"
             ? "No tracks yet — upload your first one above."
@@ -122,7 +135,8 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
                           credentials: "include",
                         });
                         if (!res.ok) return false;
-                        window.location.reload();
+                        // Remove the track in place — no auto page reload.
+                        setLocalTracks((prev) => prev.filter((t) => t.id !== track.id));
                         return true;
                       } catch (err) {
                         console.error("Failed to delete track:", err);
@@ -156,7 +170,7 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
           ))}
           </ul>
 
-          {tracks.length > VISIBLE_COUNT && (
+          {localTracks.length > VISIBLE_COUNT && (
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
@@ -168,7 +182,7 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
                 </>
               ) : (
                 <>
-                  <ChevronDown className="h-4 w-4" /> View all {tracks.length} tracks
+                  <ChevronDown className="h-4 w-4" /> View all {localTracks.length} tracks
                 </>
               )}
             </button>

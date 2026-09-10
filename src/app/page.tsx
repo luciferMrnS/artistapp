@@ -2,10 +2,11 @@ import { cookies } from "next/headers";
 import { unstable_cache } from "next/cache";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Post } from "@/components/feed/Post";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CreatePostForm } from "@/components/feed/CreatePostForm";
+import { PostList } from "@/components/feed/PostList";
+import { FeedProvider, type FeedAuthor } from "@/components/feed/FeedContext";
 import { SubscribeButton } from "@/components/feed/SubscribeButton";
 import { MusicSection, type TrackListItem } from "@/components/music/MusicSection";
 import { Logo } from "@/components/brand/Logo";
@@ -82,20 +83,6 @@ async function fetchFeedData() {
   return { posts: enriched, userId: payload.userId };
 }
 
-function formatTimeDifference(date: string): string {
-  const now = new Date();
-  const past = new Date(date);
-  const diffMs = now.getTime() - past.getTime();
-  const diffMin = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMin / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMin < 1) return "now";
-  if (diffMin < 60) return `${diffMin}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  return `${diffDays}d`;
-}
-
 /**
  * Engagement rate by followers:
  * (total likes + comments across the feed) / follower count × 100
@@ -123,14 +110,14 @@ function formatCompactNumber(value: number): string {
 
 function HomeContent({
   posts,
-  artistId,
+  artist,
   followerCount,
   monthlyListeners,
   tracks,
   liveStatus,
 }: {
   posts: Awaited<ReturnType<typeof fetchFeedData>>["posts"];
-  artistId: string | null;
+  artist: FeedAuthor;
   followerCount: number;
   monthlyListeners: number;
   tracks: TrackListItem[];
@@ -155,7 +142,7 @@ function HomeContent({
                   </p>
                   <h1 className="text-xl font-bold">Kendrick David</h1>
                 </div>
-                <SubscribeButton artistId={artistId} />
+                <SubscribeButton artistId={artist.id} />
               </div>
 
               <Link
@@ -185,8 +172,9 @@ function HomeContent({
           </header>
 
           <div className="mx-auto max-w-[680px] pb-10">
-            {/* Create Post Form — Artist only (conditionally rendered) */}
-            <CreatePostForm />
+            <FeedProvider initialPosts={posts} artist={artist}>
+              {/* Create Post Form — Artist only (conditionally rendered) */}
+              <CreatePostForm />
 
             <section className="border-b border-border p-4">
               <div className="mb-4">
@@ -222,32 +210,8 @@ function HomeContent({
               <MusicSection tracks={tracks} />
             </section>
 
-            <section className="pt-2">
-              {posts.length === 0 ? (
-                <div className="p-8 text-center text-secondary">
-                  <p className="text-sm">No posts yet. Check back later!</p>
-                </div>
-              ) : (
-                posts.map((post) => (
-                  <Post
-                    key={post.id}
-                    id={post.id}
-                    author={{
-                      id: post.author.id,
-                      username: post.author.username,
-                      avatar: post.author.avatar,
-                      role: post.author.role,
-                    }}
-                    content={post.content}
-                    image={post.image}
-                    likes={post.likes_count}
-                    comments={post.comments_count}
-                    timestamp={formatTimeDifference(post.created_at)}
-                    userLiked={post.userLiked}
-                  />
-                ))
-              )}
-            </section>
+            <PostList />
+            </FeedProvider>
           </div>
         </main>
 
@@ -316,7 +280,16 @@ export default async function Home() {
     <ProtectedRoute>
       <HomeContent
         posts={posts}
-        artistId={artist?.id ?? null}
+        artist={
+          artist
+            ? {
+                id: artist.id,
+                username: artist.username,
+                avatar: artist.avatar,
+                role: "artist",
+              }
+            : { id: "", username: "Kendrick David", avatar: "", role: "artist" }
+        }
         followerCount={followerCount}
         monthlyListeners={monthlyListeners}
         tracks={tracks}

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
+import { Lightbox } from "@/components/ui/Lightbox";
 
 interface Message {
   id: string;
@@ -37,6 +38,7 @@ export function FanCommunity() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -189,8 +191,17 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const formatTime = (d: string) => new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const renderContent = (msg: Message) => {
-    if (msg.message_type === "gif" || msg.message_type === "image") {
-      return <img src={msg.media_url!} alt="" className="max-w-[250px] rounded-lg" loading="lazy" />;
+if (msg.message_type === "gif" || msg.message_type === "image") {
+      return (
+        <button
+          type="button"
+          onClick={() => setPreview(msg.media_url!)}
+          aria-label="Open image full screen"
+          className="block cursor-zoom-in"
+        >
+          <img src={msg.media_url!} alt="" className="max-w-[250px] rounded-lg" loading="lazy" />
+        </button>
+      );
     }
     return <span className="break-words">{msg.content}</span>;
   };
@@ -309,6 +320,9 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           )}
         </div>
       </div>
+      {preview && (
+        <Lightbox src={preview} onClose={() => setPreview(null)} />
+      )}
     </div>
   );
 }

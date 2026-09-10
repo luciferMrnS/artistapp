@@ -10,12 +10,16 @@ import { UploadProgress } from "@/components/ui/UploadProgress";
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024; // 50 MB — must match the API
 const MAX_COVER_BYTES = 5 * 1024 * 1024; // 5 MB — must match the API
 
+interface TrackUploaderProps {
+  onUploaded?: () => void;
+}
+
 /**
  * Artist-only upload form for new tracks.
  * Files go to the private "tracks" storage bucket via the API;
  * fans can only stream them through short-lived signed URLs.
  */
-export function TrackUploader() {
+export function TrackUploader({ onUploaded }: TrackUploaderProps) {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -81,8 +85,12 @@ export function TrackUploader() {
         return;
       }
 
-      // Refresh to show the new track
-      window.location.reload();
+      // Update the music list in place — no auto page reload.
+      setTitle("");
+      setFile(null);
+      setCover(null);
+      setCoverPreview(null);
+      onUploaded?.();
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Track upload error:", err);
