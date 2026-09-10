@@ -88,8 +88,23 @@ export async function POST(
       return NextResponse.json({ error: comment.error }, { status: 400 });
     }
 
+    // The insert returns the raw row without the author join — re-fetch so the
+    // new comment can render immediately on the client (matches the GET shape).
+    const freshComments = await getCommentsForPost(postId);
+    const commentWithAuthor =
+      freshComments.find((c) => c.id === comment.id) ??
+      ({
+        ...comment,
+        author: {
+          id: user.userId,
+          username: user.email.split("@")[0] ?? "fan",
+          avatar: "" as string,
+          role: user.role,
+        },
+      } as (typeof freshComments)[number]);
+
     return NextResponse.json(
-      { success: true, comment },
+      { success: true, comment: commentWithAuthor },
       { status: 201 }
     );
   } catch (error) {
