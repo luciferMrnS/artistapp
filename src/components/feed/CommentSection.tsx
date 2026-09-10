@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { Send, Smile } from "lucide-react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -143,16 +142,7 @@ export function CommentSection({
             ))
           )}
 
-          {!user ? (
-            <div className="flex items-center gap-2 pt-2">
-              <Link
-                href="/auth/login"
-                className="rounded-full border border-primary/40 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10"
-              >
-                Sign in to comment
-              </Link>
-            </div>
-          ) : (
+          {user && (
             <div className="flex items-center gap-2 pt-2">
               <img
                 src={resolveAvatarUrl(user.avatar)}

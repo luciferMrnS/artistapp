@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CreatePostForm } from "@/components/feed/CreatePostForm";
 import { PostList } from "@/components/feed/PostList";
 import { FeedProvider, type FeedAuthor } from "@/components/feed/FeedContext";
@@ -54,22 +55,20 @@ async function fetchFeedData() {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth-token")?.value;
 
-  const posts = await cachedGetAllPosts();
-
-  if (!token) {
+  if (!token)
     return {
-      posts: posts.map((post) => ({ ...post, userLiked: false })),
+      posts: [] as (PostWithAuthor & { userLiked: boolean })[],
       userId: null as string | null,
     };
-  }
 
   const payload = verifyToken(token);
-  if (!payload) {
+  if (!payload)
     return {
-      posts: posts.map((post) => ({ ...post, userLiked: false })),
+      posts: [] as (PostWithAuthor & { userLiked: boolean })[],
       userId: null as string | null,
     };
-  }
+
+  const posts = await cachedGetAllPosts();
 
   // Batch the like check into a single query (instead of one per post)
   const likedIds = await getUserLikedPostIds(
@@ -278,22 +277,24 @@ export default async function Home() {
   }));
 
   return (
-    <HomeContent
-      posts={posts}
-      artist={
-        artist
-          ? {
-              id: artist.id,
-              username: artist.username,
-              avatar: artist.avatar,
-              role: "artist",
-            }
-          : { id: "", username: "Kendrick David", avatar: "", role: "artist" }
-      }
-      followerCount={followerCount}
-      monthlyListeners={monthlyListeners}
-      tracks={tracks}
-      liveStatus={liveStatus}
-    />
+    <ProtectedRoute>
+      <HomeContent
+        posts={posts}
+        artist={
+          artist
+            ? {
+                id: artist.id,
+                username: artist.username,
+                avatar: artist.avatar,
+                role: "artist",
+              }
+            : { id: "", username: "Kendrick David", avatar: "", role: "artist" }
+        }
+        followerCount={followerCount}
+        monthlyListeners={monthlyListeners}
+        tracks={tracks}
+        liveStatus={liveStatus}
+      />
+    </ProtectedRoute>
   );
 }
