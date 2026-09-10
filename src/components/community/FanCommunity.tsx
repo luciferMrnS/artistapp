@@ -40,13 +40,30 @@ export function FanCommunity() {
   const [uploadError, setUploadError] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // While the user is pinned near the bottom, new polls keep them there;
+  // once they scroll up to read older messages, polls stop stealing focus.
+  const autoScrollRef = useRef(true);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    autoScrollRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }, []);
+
+  const forceScrollToBottom = useCallback(() => {
+    autoScrollRef.current = true;
+    scrollToBottom();
+  }, [scrollToBottom]);
 
 const fetchMessages = useCallback(async () => {
     try {
@@ -86,7 +103,9 @@ const fetchMessages = useCallback(async () => {
     return () => { cancelled = true; if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  useEffect(() => {
+    if (autoScrollRef.current) scrollToBottom();
+  }, [messages, scrollToBottom]);
 
 const sendMessage = async () => {
     if (!input.trim() || isSending) return;
@@ -116,7 +135,11 @@ const sendMessage = async () => {
         throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
       }
       await fetchMessages();
-    } catch (e) { console.error("Failed to send:", e); }
+      // Sending a message snaps you back to the newest message.
+      forceScrollToBottom();
+    } catch (e) {
+      console.error("Failed to send:", e);
+    }
     setIsSending(false);
   };
 
@@ -153,6 +176,7 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           throw new Error(errorData2.error || `HTTP error! status: ${res2.status}`);
         }
         await fetchMessages();
+        forceScrollToBottom();
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Failed to upload image");
@@ -216,7 +240,7 @@ if (msg.message_type === "gif" || msg.message_type === "image") {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef} onScroll={handleScroll}>
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
