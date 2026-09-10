@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kendrick David — Artist Community
 
-## Getting Started
+Artist community site built with **Next.js 16** (App Router) + **Supabase**
+(Postgres, Auth, Storage). Includes an artist feed, auth with email
+verification, likes/comments, subscriptions, music tracks with stream
+counting and a player seek bar, themed media pages, direct messages,
+notifications, live-status, and real-time "fans online" presence.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router, TypeScript, Tailwind CSS v4)
+- Supabase Postgres (data), Auth (email confirm / password reset), Storage (uploads)
+- Custom server auth: bcrypt password hashing + signed JWT cookie sessions
+
+## Local development
+
+1. Copy `.env.example` to `.env.local` and fill in the real values.
+2. Install and run:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> Data always lives in the hosted Supabase project (there is no local
+> database). Schema is versioned as SQL in `database/` — apply new migrations
+> in the Supabase SQL Editor.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment variables
 
-## Learn More
+See `.env.example` for the full list. Required at runtime:
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_APP_URL` | Public base URL (used for metadata, sitemap, email redirects) |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Public key — safe in the browser |
+| `SUPABASE_SERVICE_ROLE_KEY` | Admin key — **server only**, never expose or commit |
+| `JWT_SECRET` | Signs app session cookies (long random string in prod) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Optional: `LIVE_*` vars enable live streaming; without them the live page
+shows "Live soon". `E2E_ARTIST_PASSWORD` is used by `e2e_test.ps1`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`.env*` files are gitignored.
 
-## Deploy on Vercel
+## Deploy on Render
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The app keeps using the **same Supabase database** in production — nothing is
+stored locally, so fans, posts, tracks, and storage carry over automatically.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push this repo to GitHub (it is checked out on branch `main`).
+2. In Render, create a **Web Service** from the repo (or use the Blueprint tab,
+   which reads `render.yaml`). Defaults already match:
+   - Build command: `npm run build`
+   - Start command: `npm run start` (honors Render's `$PORT`, binds `0.0.0.0`)
+3. Set the same env vars as your dev `.env.local` in Render
+   (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `JWT_SECRET`, and `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_APP_URL` =
+   `https://<your-app>.onrender.com`).
+4. In the **Supabase dashboard → Authentication → URL Configuration**:
+   - Site URL: `https://<your-app>.onrender.com`
+   - Redirect URLs: add `https://<your-app>.onrender.com/auth/callback`
+     and `https://<your-app>.onrender.com/auth/update-password`
+   - (Dev/localhost entries can stay alongside.)
+5. Confirm SMTP is configured (Authentication → Emails) so confirmation and
+   password-reset emails actually send.
+
+Optional: run Render in a region close to your Supabase project for lower
+latency. Enable Supabase **Pro** for automated daily backups (the free tier
+has none and pauses the project after 7 days of inactivity).
+
+A `Dockerfile` (multi-stage, non-root, standalone output) is included for
+self-hosting; `vercel.json` is included for Vercel as an alternative.
