@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Disc3, Music2 } from "lucide-react";
+import { Disc3, Music2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { TrackUploader } from "./TrackUploader";
@@ -26,6 +26,8 @@ function formatCompactNumber(value: number): string {
   }).format(value);
 }
 
+const VISIBLE_COUNT = 3;
+
 /**
  * Streaming section: artist posts music, fans stream it.
  * Audio is served through expiring signed URLs from a private
@@ -36,6 +38,7 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
   const { user } = useAuth();
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   // Record each stream once per page session per track,
   // and only once the track has actually been played for 30s+.
   const recordedRef = useRef<Set<string>>(new Set());
@@ -60,6 +63,8 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
     }).catch((err) => console.error("Failed to record stream:", err));
   };
 
+  const visibleTracks = showAll ? tracks : tracks.slice(0, VISIBLE_COUNT);
+
   return (
     <div className="rounded-2xl border border-border bg-zinc-900 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -76,8 +81,9 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
             : "No tracks yet. Check back soon!"}
         </p>
       ) : (
-        <ul className="space-y-3">
-          {tracks.map((track) => (
+        <>
+          <ul className="space-y-3">
+            {visibleTracks.map((track) => (
             <li
               key={track.id}
               className={cn(
@@ -148,7 +154,26 @@ export function MusicSection({ tracks }: { tracks: TrackListItem[] }) {
               )}
             </li>
           ))}
-        </ul>
+          </ul>
+
+          {tracks.length > VISIBLE_COUNT && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-black/40 py-2.5 text-sm font-medium text-secondary transition hover:bg-white/5 hover:text-white"
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp className="h-4 w-4" /> Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" /> View all {tracks.length} tracks
+                </>
+              )}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
