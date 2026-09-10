@@ -164,11 +164,11 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!res.ok) {
         throw new Error(uploadErrorOf(res, `HTTP error! status: ${res.status}`));
       }
-      if (res.data?.signedUrl) {
+      if (res.data?.url) {
         const res2 = await fetch("/api/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: "", messageType: "image", mediaUrl: res.data.signedUrl }),
+          body: JSON.stringify({ content: "", messageType: "image", mediaUrl: res.data.url }),
           credentials: "include"
         });
         if (!res2.ok) {

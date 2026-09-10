@@ -2801,7 +2801,10 @@ export async function getRecentMessages(limit = 100): Promise<Message[]> {
     return [];
   }
 
-  return data as Message[];
+  return ((data ?? []) as Message[]).map((msg) => ({
+    ...msg,
+    media_url: resolveCommunityMediaUrl(msg.media_url),
+  }));
 }
 
 /**
@@ -2883,4 +2886,56 @@ export async function getCommunityImageUrl(
   }
 
   return data?.signedUrl ?? null;
+}
+
+/**
+ * Proxy a community image from the private bucket so the client never
+ * holds the raw Supabase storage URL. Same idea as the avatar proxy.
+ */
+export async function downloadCommunityImage(
+  path: string
+): Promise<{ data?: Blob; error?: string }> {
+  const { data, error } = await supabaseAdmin.storage
+    .from(COMMUNITY_MEDIA_BUCKET)
+    .download(path);
+
+  if (error) {
+    console.error("Error downloading community image:", error);
+    return { error: error.message };
+  }
+
+  return { data };
+}
+
+const COMMUNITY_MEDIA_PROXY_PREFIX = "/api/community-media?p=";
+const COMMUNITY_MEDIA_SIGN_RE =
+  /\/storage\/v1\/object\/sign\/community-media\/([^?]+)/;
+
+/**
+ * Normalize a stored community-image URL to our own proxy.
+ * New messages store `/api/community-media?p=...` directly; older ones stored
+ * an expiring Supabase sign URL — recover the storage path from it so images
+ * keep working forever instead of breaking when the token expires.
+ */
+export function resolveCommunityMediaUrl(
+  mediaUrl: string | null
+): string | null {
+  if (!mediaUrl) return null;
+  if (mediaUrl.startsWith(COMMUNITY_MEDIA_PROXY_PREFIX)) return mediaUrl;
+
+  const signMatch = mediaUrl.match(COMMUNITY_MEDIA_SIGN_RE);
+  if (signMatch) {
+    let rawPath = signMatch[1];
+    try {
+      rawPath = decodeURIComponent(rawPath);
+    } catch {
+      /* keep raw path */
+    }
+    return `${COMMUNITY_MEDIA_PROXY_PREFIX}${encodeURIComponent(rawPath)}`;
+  }
+
+  // External URLs (e.g. gifs) pass through unchanged.
+  if (!mediaUrl.includes("supabase.co")) return mediaUrl;
+
+  return mediaUrl;
 }
