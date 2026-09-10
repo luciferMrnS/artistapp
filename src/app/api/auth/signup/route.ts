@@ -11,6 +11,25 @@ import type { UserRole } from "@/lib/db";
  * address and the account stays unverified until the link is clicked.
  * Supports an optional "role" field: "artist" or "fan" (defaults to "fan")
  */
+
+// Supabase Auth sends confirmation emails on a strict schedule (currently
+// 2 per hour per account/IP). Throttle our own signups to match so users get
+// a friendly countdown instead of the raw "email rate limit" error, and so
+// repeated clicks can't burn through Supabase's quota.
+const RATE_LIMIT_MS = 30 * 60 * 1000;
+
+// In-memory throttle — adequate on a single Render instance.
+const sendAttempts = new Map<string, number>();
+
+function isRateLimitError(message: string): boolean {
+  return (
+    /rate\s*limit/i.test(message) ||
+    /too\s*many/i.test(message) ||
+    /email sending is limited/i.test(message) ||
+    /more than \d+ emails/i.test(message)
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -56,6 +75,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Throttle confirmation emails per email address (primary key) so a
+    // burst of attempts is normalized instead of hitting Supabase's limit.
+    const key = `${email.toLowerCase()} || ${req.headers.get("x-forwarded-for") ?? "unknown"}`;
+    const now = Date.now();
+    const sinceLastSend = now - (sendAttempts.get(key) ?? 0);
+    if (sinceLastSend < RATE_LIMIT_MS) {
+      return NextResponse.json(
+        {
+          error:
+            "Verification emails are limited to 2 per hour. Please wait before trying again.",
+          rateLimited: true,
+          retryAfterMs: RATE_LIMIT_MS - sinceLastSend,
+        },
+        { status: 429 }
+      );
+    }
+
     // All new signups are fans. The artist account is seeded in the
     // database and cannot be created through the public signup flow.
     const userRole: UserRole = "fan";
@@ -75,9 +111,26 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
+      if (isRateLimitError(error.message)) {
+        // Mark the send as attempted so the user waits out the cooldown
+        // instead of re-hitting the raw Supabase error.
+        sendAttempts.set(key, now);
+        console.error("Supabase signup rate-limited:", error.message);
+        return NextResponse.json(
+          {
+            error:
+              "You've used up this hour's send of verification emails (2 per hour). Please wait about 30 minutes and try again.",
+            rateLimited: true,
+            retryAfterMs: RATE_LIMIT_MS,
+          },
+          { status: 429 }
+        );
+      }
       console.error("Supabase signup error:", error.message);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    sendAttempts.set(key, now);
 
     if (!data.user) {
       return NextResponse.json(

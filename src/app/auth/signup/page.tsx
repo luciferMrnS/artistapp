@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
@@ -18,8 +18,19 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
+  const [waitSeconds, setWaitSeconds] = useState(0);
   const { setUser } = useAuth();
   const router = useRouter();
+
+  // Countdown while the confirmation-email cooldown is active.
+  useEffect(() => {
+    if (waitSeconds <= 0) return;
+    const timer = setInterval(
+      () => setWaitSeconds((s) => Math.max(0, s - 1)),
+      1000
+    );
+    return () => clearInterval(timer);
+  }, [waitSeconds]);
 
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
 
@@ -64,6 +75,9 @@ export default function SignupPage() {
 
       if (!response.ok) {
         setError(data.error || "Signup failed");
+        if (data.rateLimited && data.retryAfterMs) {
+          setWaitSeconds(Math.ceil(data.retryAfterMs / 1000));
+        }
         return;
       }
 
@@ -258,11 +272,23 @@ export default function SignupPage() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading || !passwordsMatch || !username || !email}
+            disabled={
+              isLoading ||
+              !passwordsMatch ||
+              !username ||
+              !email ||
+              waitSeconds > 0
+            }
             className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
           >
-            {isLoading ? "Creating account..." : "Create account"}
-            {!isLoading && <ArrowRight className="h-5 w-5" />}
+            {isLoading
+              ? "Creating account..."
+              : waitSeconds > 0
+                ? waitSeconds >= 60
+                  ? `Wait ${Math.ceil(waitSeconds / 60)}m to retry…`
+                  : `Wait ${waitSeconds}s to retry…`
+                : "Create account"}
+            {!isLoading && waitSeconds === 0 && <ArrowRight className="h-5 w-5" />}
           </button>
         </form>
 
