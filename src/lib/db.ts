@@ -967,6 +967,230 @@ export async function getThemeMedia(theme: ThemeSlug): Promise<ThemeMediaItem[]>
   }));
 }
 
+// ─── Videos (Highlights -> Videos) ────────────────────
+
+export type VideoSource = "upload" | "link";
+
+export interface VideoRow {
+  id: string;
+  title: string;
+  caption: string;
+  source: VideoSource;
+  storage_path: string;
+  link_url: string;
+  embed_url: string;
+  thumbnail_path: string;
+  thumbnail_url: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface VideoItem {
+  id: string;
+  title: string;
+  caption: string;
+  source: VideoSource;
+  /** Playable file for uploads (public bucket URL) */
+  media_url: string | null;
+  /** iframe src for embedded links */
+  embed_url: string;
+  /** Resolved thumbnail (uploaded file, YouTube auto, or provided URL) */
+  thumbnail: string | null;
+  created_at: string;
+}
+
+function videoToItem(row: VideoRow): VideoItem {
+  let media_url: string | null = null;
+  let thumbnail: string | null = row.thumbnail_url || null;
+
+  if (row.source === "upload" && row.storage_path) {
+    const bucket = supabaseAdmin.storage.from(THEME_MEDIA_BUCKET);
+    media_url = bucket.getPublicUrl(row.storage_path).data.publicUrl;
+    if (row.thumbnail_path) {
+      thumbnail = bucket.getPublicUrl(row.thumbnail_path).data.publicUrl;
+    }
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    caption: row.caption,
+    source: row.source,
+    media_url,
+    embed_url: row.embed_url,
+    thumbnail,
+    created_at: row.created_at,
+  };
+}
+
+/**
+ * List all videos (newest first)
+ */
+export async function getVideos(): Promise<VideoItem[]> {
+  const { data, error } = await supabaseAdmin
+    .from("videos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (isTableMissing(error)) return [];
+    console.error("Error fetching videos:", error);
+    return [];
+  }
+
+  return ((data ?? []) as VideoRow[]).map(videoToItem);
+}
+
+/**
+ * Save an uploaded video file (+ optional thumbnail file) and return its row.
+ * Both files land in the public theme-media bucket; they're removed again if
+ * the row insert fails.
+ */
+export async function createVideoFromUpload(params: {
+  title: string;
+  caption: string;
+  file: File;
+  thumbnail?: File | null;
+}): Promise<{ item?: VideoItem; error?: string }> {
+  const { title, caption, file, thumbnail } = params;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const id = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const path = `videos/${id}_${safeName}`;
+
+  const { error: storageError } = await supabaseAdmin.storage
+    .from(THEME_MEDIA_BUCKET)
+    .upload(path, await file.arrayBuffer(), {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (storageError) {
+    console.error("Error uploading video:", storageError);
+    return { error: storageError.message || "Failed to upload video" };
+  }
+
+  let thumbnailPath = "";
+  if (thumbnail) {
+    const tSafe = thumbnail.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const tPath = `videos/thumbs/${id}_${tSafe}`;
+    const { error: tErr } = await supabaseAdmin.storage
+      .from(THEME_MEDIA_BUCKET)
+      .upload(tPath, await thumbnail.arrayBuffer(), {
+        contentType: thumbnail.type,
+        upsert: false,
+      });
+    if (!tErr) thumbnailPath = tPath;
+  }
+
+  const row: VideoRow = {
+    id,
+    title,
+    caption,
+    source: "upload",
+    storage_path: path,
+    link_url: "",
+    embed_url: "",
+    thumbnail_path: thumbnailPath,
+    thumbnail_url: "",
+    mime_type: file.type || "video/mp4",
+    size_bytes: file.size,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("videos")
+    .insert([row])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error inserting video:", error);
+    await supabaseAdmin.storage.from(THEME_MEDIA_BUCKET).remove([path]);
+    if (thumbnailPath) {
+      await supabaseAdmin.storage.from(THEME_MEDIA_BUCKET).remove([thumbnailPath]);
+    }
+    if (isTableMissing(error)) return { error: "Videos are not set up yet" };
+    return { error: error.message || "Failed to save video" };
+  }
+
+  return { item: videoToItem(data as VideoRow) };
+}
+
+/**
+ * Save an embedded video (YouTube/Vimeo link plus optional thumbnail URL)
+ */
+export async function createVideoFromLink(params: {
+  title: string;
+  caption: string;
+  linkUrl: string;
+  embedUrl: string;
+  thumbnail?: string;
+}): Promise<{ item?: VideoItem; error?: string }> {
+  const { title, caption, linkUrl, embedUrl, thumbnail } = params;
+  const id = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  const row: VideoRow = {
+    id,
+    title,
+    caption,
+    source: "link",
+    storage_path: "",
+    link_url: linkUrl,
+    embed_url: embedUrl,
+    thumbnail_path: "",
+    thumbnail_url: thumbnail ?? "",
+    mime_type: "",
+    size_bytes: 0,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("videos")
+    .insert([row])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error inserting linked video:", error);
+    if (isTableMissing(error)) return { error: "Videos are not set up yet" };
+    return { error: error.message || "Failed to save video" };
+  }
+
+  return { item: videoToItem(data as VideoRow) };
+}
+
+/**
+ * Delete a video (and its stored files)
+ */
+export async function deleteVideo(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const { data: row, error: fetchError } = await supabaseAdmin
+    .from("videos")
+    .select("storage_path, thumbnail_path")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchError || !row) {
+    return { success: false, error: "Video not found" };
+  }
+
+  if (row.storage_path) {
+    await supabaseAdmin.storage.from(THEME_MEDIA_BUCKET).remove([row.storage_path]);
+  }
+  if (row.thumbnail_path) {
+    await supabaseAdmin.storage.from(THEME_MEDIA_BUCKET).remove([row.thumbnail_path]);
+  }
+
+  const { error } = await supabaseAdmin.from("videos").delete().eq("id", id);
+  if (error) {
+    console.error("Error deleting video:", error);
+    return { success: false, error: error.message || "Failed to delete video" };
+  }
+  return { success: true };
+}
+
 // ─── Like Functions ─────────────────────────────────
 
 /**

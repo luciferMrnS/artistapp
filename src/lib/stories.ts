@@ -8,6 +8,7 @@ import {
   Radio,
   Heart,
   Mic2,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 
@@ -66,6 +67,15 @@ export const STORIES: Story[] = [
     description:
       "Sessions, gear, takes and out-takes. A look at the room where every song starts.",
     icon: Mic2,
+  },
+  {
+    slug: "videos",
+    name: "Videos",
+    tone: "from-fuchsia-500 to-purple-500",
+    tagline: "Watch the visuals",
+    description:
+      "Music videos, live cuts and short films from the artist — every upload gets a clean, uniform thumbnail, a title and a caption to match.",
+    icon: Video,
   },
 ];
 

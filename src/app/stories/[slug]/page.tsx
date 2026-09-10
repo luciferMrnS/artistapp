@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SubscribeButton } from "@/components/feed/SubscribeButton";
 import { ThemeMediaSection } from "@/components/media/ThemeMediaSection";
+import { VideosSection } from "@/components/videos/VideosSection";
 import { LiveNowPlayer } from "@/components/live/LiveNowPlayer";
 import { ComingSoonBanner } from "@/components/live/ComingSoonBanner";
 import { ComingSoonProvider, ComingSoonTrigger } from "@/components/ui/ComingSoonProvider";
@@ -115,6 +116,11 @@ export default async function StoryPage({
 
               {story.slug === "fan-club" && (
                 <MerchStore />
+              )}
+
+              {/* ── Videos topic ── */}
+              {story.slug === "videos" && (
+                <VideosSection />
               )}
 
               {/* ── Themed media (New drop / Behind the scenes / Studio) ── */}
