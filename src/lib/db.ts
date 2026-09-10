@@ -900,7 +900,7 @@ export async function deleteUserAccount(
 ): Promise<{ success: boolean; error?: string }> {
   const { data: user, error: fetchError } = await supabaseAdmin
     .from("users")
-    .select("avatar")
+    .select("avatar, supabase_auth_id")
     .eq("id", userId)
     .maybeSingle();
 
@@ -911,11 +911,26 @@ export async function deleteUserAccount(
   if (!user) return { success: false, error: "User not found" };
 
   // Best-effort: remove the user's own uploaded avatar file if there is one.
-  const match = (user as { avatar: string }).avatar.match(
-    SUPABASE_AVATAR_STORAGE_RE
-  );
+  const typedUser = user as { avatar: string; supabase_auth_id?: string | null };
+  const match = typedUser.avatar.match(SUPABASE_AVATAR_STORAGE_RE);
   if (match) {
     await supabaseAdmin.storage.from(AVATARS_BUCKET).remove([match[2]]);
+  }
+
+  // Delete the Supabase Auth identity (email + password) first so the email
+  // is fully purged and the account can never log in or re-confirm again.
+  // The app profile row is removed afterwards.
+  if (typedUser.supabase_auth_id) {
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      typedUser.supabase_auth_id
+    );
+    if (authError) {
+      console.error("Error deleting Supabase Auth user:", authError);
+      return {
+        success: false,
+        error: authError.message || "Failed to delete account identity",
+      };
+    }
   }
 
   const { error } = await supabaseAdmin
