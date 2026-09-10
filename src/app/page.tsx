@@ -115,6 +115,7 @@ function HomeContent({
   monthlyListeners,
   tracks,
   liveStatus,
+  isArtist,
 }: {
   posts: Awaited<ReturnType<typeof fetchFeedData>>["posts"];
   artist: FeedAuthor;
@@ -122,6 +123,7 @@ function HomeContent({
   monthlyListeners: number;
   tracks: TrackListItem[];
   liveStatus: LiveStatus;
+  isArtist: boolean;
 }) {
   const engagementRate = computeEngagementRate(posts, followerCount);
   return (
@@ -217,31 +219,33 @@ function HomeContent({
 
         <aside className="order-first ml-20 w-auto shrink-0 p-4 xl:order-last xl:ml-0 xl:w-[330px]">
           <div className="space-y-5 xl:sticky xl:top-6">
-            <div className="rounded-2xl border border-border bg-zinc-900 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Artist pulse</h3>
-                <Sparkles className="h-4 w-4 text-primary" />
-              </div>
+            {isArtist && (
+              <div className="rounded-2xl border border-border bg-zinc-900 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Artist pulse</h3>
+                  <Sparkles className="h-4 w-4 text-primary" />
+                </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
-                  <span className="text-secondary">Followers</span>
-                  <span className="font-bold">
-                    {formatCompactNumber(followerCount)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
-                  <span className="text-secondary">Monthly listeners</span>
-                  <span className="font-bold">
-                    {formatCompactNumber(monthlyListeners)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
-                  <span className="text-secondary">Engagement</span>
-                  <span className="font-bold">{engagementRate}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
+                    <span className="text-secondary">Followers</span>
+                    <span className="font-bold">
+                      {formatCompactNumber(followerCount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
+                    <span className="text-secondary">Monthly listeners</span>
+                    <span className="font-bold">
+                      {formatCompactNumber(monthlyListeners)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/40 p-3">
+                    <span className="text-secondary">Engagement</span>
+                    <span className="font-bold">{engagementRate}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <FanLeaderboard />
           </div>
@@ -253,7 +257,7 @@ function HomeContent({
 
 export default async function Home() {
   // Independent lookups run concurrently to cut latency on every render
-  const [{ posts }, artist, liveStatus, rawTracks] = await Promise.all([
+  const [{ posts, userId }, artist, liveStatus, rawTracks] = await Promise.all([
     fetchFeedData(),
     cachedGetArtistUser(),
     cachedLiveStatus(),
@@ -294,6 +298,7 @@ export default async function Home() {
         monthlyListeners={monthlyListeners}
         tracks={tracks}
         liveStatus={liveStatus}
+        isArtist={Boolean(artist && userId === artist.id)}
       />
     </ProtectedRoute>
   );
