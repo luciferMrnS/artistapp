@@ -1310,9 +1310,67 @@ export async function getFollowers(userId: string) {
   return data;
 }
 
+export interface SubscriberRow {
+  id: string;
+  username: string;
+  email: string;
+  avatar: string;
+  email_verified: boolean;
+  subscribed_at: string;
+}
+
+interface FollowSubscriberQuery {
+  created_at: string;
+  follower: {
+    id: string;
+    username: string;
+    email: string;
+    avatar: string;
+    email_verified: boolean;
+  } | null;
+}
+
 /**
- * Get users that a user is following (with user info)
+ * Subscribers (followers) of the artist with contact details —
+ * used by the dashboard fan list and newsletter sends.
  */
+export async function getArtistFollowers(): Promise<SubscriberRow[]> {
+  const artist = await getArtistUser();
+  if (!artist) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from("follows")
+    .select(`
+      created_at,
+      follower:users!follows_follower_id_fkey (
+        id,
+        username,
+        email,
+        avatar,
+        email_verified
+      )
+    `)
+    .eq("following_id", artist.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching artist subscribers:", error);
+    return [];
+  }
+
+  const rows = (data ?? []) as unknown as FollowSubscriberQuery[];
+
+  return rows
+    .filter((row) => row.follower && row.follower.id !== artist.id)
+    .map((row) => ({
+      id: row.follower!.id,
+      username: row.follower!.username,
+      email: row.follower!.email,
+      avatar: row.follower!.avatar,
+      email_verified: row.follower!.email_verified,
+      subscribed_at: row.created_at,
+    }));
+}
 export async function getFollowing(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("follows")

@@ -10,11 +10,14 @@ import {
   Music4,
   TrendingUp,
   Crown,
+  BadgeCheck,
+  Mail,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { NewsletterForm } from "@/components/dashboard/NewsletterForm";
 import { verifyToken } from "@/lib/server-auth";
-import { getArtistStats, type ArtistStats } from "@/lib/db";
+import { getArtistStats, getArtistFollowers, type ArtistStats, type SubscriberRow } from "@/lib/db";
 
 function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -61,7 +64,13 @@ function StatCard({
   );
 }
 
-function DashboardContent({ stats }: { stats: ArtistStats }) {
+function DashboardContent({
+  stats,
+  subscribers,
+}: {
+  stats: ArtistStats;
+  subscribers: SubscriberRow[];
+}) {
   const maxEngagement = stats.topFans[0]?.total ?? 0;
   const maxPostEngagement = stats.posts.reduce(
     (max, post) => Math.max(max, post.likes_count + post.comments_count),
@@ -249,6 +258,54 @@ function DashboardContent({ stats }: { stats: ArtistStats }) {
                 </ul>
               )}
             </section>
+
+            {/* Subscribers list */}
+            <section className="rounded-2xl border border-border bg-zinc-900 p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+                <Users className="h-5 w-5 text-sky-400" /> Subscribers
+                <span className="ml-auto rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-secondary">
+                  {subscribers.length}
+                </span>
+              </h2>
+
+              {subscribers.length === 0 ? (
+                <p className="text-sm text-secondary">
+                  No subscribers yet — fans who hit "Subscribe" will appear here.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {subscribers.map((sub) => (
+                    <li
+                      key={sub.id}
+                      className="flex items-center gap-3 rounded-xl bg-black/40 px-3 py-2.5"
+                    >
+                      <img
+                        src={sub.avatar || `https://i.pravatar.cc/150?u=${sub.id}`}
+                        alt={sub.username}
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                          {sub.username}
+                          {sub.email_verified && (
+                            <span title="Verified email">
+                              <BadgeCheck className="h-4 w-4 shrink-0 text-sky-400" />
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-secondary">{sub.email}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] text-secondary">
+                        {new Date(sub.subscribed_at).toLocaleDateString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* Newsletter */}
+            <NewsletterForm />
           </div>
         </main>
       </div>
@@ -263,12 +320,15 @@ export default async function DashboardPage() {
   if (!payload) redirect("/auth/login");
   if (payload.role !== "artist") redirect("/");
 
-  const stats = await getArtistStats();
+  const [stats, subscribers] = await Promise.all([
+    getArtistStats(),
+    getArtistFollowers(),
+  ]);
   if (!stats) redirect("/");
 
   return (
     <ProtectedRoute>
-      <DashboardContent stats={stats} />
+      <DashboardContent stats={stats} subscribers={subscribers} />
     </ProtectedRoute>
   );
 }

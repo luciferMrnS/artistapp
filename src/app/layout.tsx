@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
+import { PwaSetup } from "@/components/pwa/PwaSetup";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,7 +27,13 @@ export const metadata: Metadata = {
     "Artist updates, fan posts, and live sessions built for a social-first music brand.",
   icons: {
     icon: "/icon.png",
-    apple: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Kendrick David",
   },
   openGraph: {
     type: "website",
@@ -46,6 +53,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -55,6 +69,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full bg-black text-white">
         <AuthProvider>
           <PresenceHeartbeat />
+          <PwaSetup />
           {children}
         </AuthProvider>
       </body>

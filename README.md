@@ -42,6 +42,9 @@ See `.env.example` for the full list. Required at runtime:
 
 Optional: `LIVE_*` vars enable live streaming; without them the live page
 shows "Live soon". `E2E_ARTIST_PASSWORD` is used by `e2e_test.ps1`.
+`RESEND_API_KEY` (and a verified `RESEND_FROM` sender) enable the dashboard's
+"Send newsletter" tool; the free tier needs a verified domain, otherwise
+`onboarding@resend.dev` only reaches your own inbox.
 
 `.env*` files are gitignored.
 
