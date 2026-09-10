@@ -215,7 +215,7 @@ function HomeContent({
           </div>
         </main>
 
-        <aside className="ml-20 w-auto shrink-0 p-4 xl:ml-0 xl:w-[330px]">
+        <aside className="order-first ml-20 w-auto shrink-0 p-4 xl:order-last xl:ml-0 xl:w-[330px]">
           <div className="space-y-5 xl:sticky xl:top-6">
             <div className="rounded-2xl border border-border bg-zinc-900 p-4">
               <div className="mb-3 flex items-center justify-between">
