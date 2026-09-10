@@ -25,7 +25,13 @@ export function LikeButton({
   const [isAnimating, setIsAnimating] = useState(false);
 
   const toggleLike = async () => {
-    if (isAnimating || viewOnly) return;
+    if (isAnimating) return;
+
+    if (viewOnly) {
+      window.alert("You have limited access, try again later");
+      return;
+    }
+
     setIsAnimating(true);
 
     try {

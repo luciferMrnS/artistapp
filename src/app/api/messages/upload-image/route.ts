@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     if (await isUserRestricted(user.userId)) {
-      return NextResponse.json({ error: "Your account is view-only" }, { status: 403 });
+      return NextResponse.json({ error: "You have limited access, try again later" }, { status: 403 });
     }
     const formData = await req.formData();
     const file = formData.get("file") as File | null;

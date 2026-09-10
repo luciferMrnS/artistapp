@@ -56,7 +56,7 @@ export async function POST(
 
     if (await isUserRestricted(user.userId)) {
       return NextResponse.json(
-        { error: "Your account is view-only" },
+        { error: "You have limited access, try again later" },
         { status: 403 }
       );
     }

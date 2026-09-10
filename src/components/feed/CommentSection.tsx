@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, Smile, EyeOff } from "lucide-react";
+import { Send, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -65,6 +65,11 @@ export function CommentSection({
 
   const submitComment = async () => {
     if (!inputValue.trim() || !user) return;
+
+    if (user.restricted_at) {
+      window.alert("You have limited access, try again later");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -137,13 +142,7 @@ export function CommentSection({
             ))
           )}
 
-          {user && user.restricted_at && (
-            <p className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 pt-2 text-xs text-amber-400">
-              <EyeOff className="h-4 w-4 shrink-0" /> Your account is view-only —
-              you can read but not comment.
-            </p>
-          )}
-          {user && !user.restricted_at && (
+          {user && (
             <div className="flex items-center gap-2 pt-2">
               <img
                 src={resolveAvatarUrl(user.avatar)}
