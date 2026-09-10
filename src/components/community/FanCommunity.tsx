@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { Lightbox } from "@/components/ui/Lightbox";
+import { markCreedRead } from "@/lib/creed-unread";
 
 interface Message {
   id: string;
@@ -82,6 +83,9 @@ const fetchMessages = useCallback(async () => {
   }, []);
 
   useEffect(() => {
+    // Opening the creed clears the unread badge baseline on the sidebar.
+    markCreedRead();
+
     let cancelled = false;
     const fetchData = async () => {
       try {

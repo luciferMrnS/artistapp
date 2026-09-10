@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
+import { getCreedLastRead } from "@/lib/creed-unread";
 
 const navItems = [
   { icon: Home, label: "Home", href: "/", artistOnly: false },
@@ -22,6 +23,7 @@ export function Sidebar() {
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+  const [creedUnreadCount, setCreedUnreadCount] = useState(0);
 
   // Poll for unread notification + message counts while logged in
   useEffect(() => {
@@ -33,11 +35,13 @@ export function Sidebar() {
       if (!cancelled) {
         setUnreadCount(0);
         setDmUnreadCount(0);
+        setCreedUnreadCount(0);
       }
       try {
-        const [notifRes, dmRes] = await Promise.all([
+        const [notifRes, dmRes, creedRes] = await Promise.all([
           fetch("/api/notifications"),
           fetch("/api/dm/conversations"),
+          fetch("/api/messages"),
         ]);
         if (!cancelled) {
           if (notifRes.ok) {
@@ -53,6 +57,18 @@ export function Sidebar() {
             );
             setDmUnreadCount(dmTotal);
           }
+          if (creedRes.ok) {
+            const creedData = await creedRes.json();
+            const lastRead = getCreedLastRead();
+            const mineId = user.id;
+            const unread = (creedData.messages ?? []).filter(
+              (m: { sender_id?: string; created_at?: string }) =>
+                m.sender_id !== mineId &&
+                m.created_at &&
+                new Date(m.created_at).getTime() > lastRead
+            ).length;
+            setCreedUnreadCount(unread);
+          }
         }
       } catch {
         // Polling is best-effort; keep last known value
@@ -60,7 +76,7 @@ export function Sidebar() {
     };
 
     refreshUnread();
-    const interval = setInterval(refreshUnread, 30_000);
+    const interval = setInterval(refreshUnread, 15_000);
 
     return () => {
       cancelled = true;
@@ -101,6 +117,14 @@ export function Sidebar() {
             {item.label === "Messages" && dmUnreadCount > 0 && (
               <span className="absolute left-7 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-500 px-1.5 text-[10px] font-bold text-white ring-2 ring-black xl:static xl:ml-1">
                 {dmUnreadCount > 99 ? "99+" : dmUnreadCount}
+              </span>
+            )}
+            {item.label === "Creed" && creedUnreadCount > 0 && (
+              <span
+                title="New creed messages"
+                className="absolute left-7 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white ring-2 ring-black xl:static xl:ml-1 animate-pulse"
+              >
+                {creedUnreadCount > 99 ? "99+" : creedUnreadCount}
               </span>
             )}
           </Link>
