@@ -12,7 +12,7 @@ import { Logo } from "@/components/brand/Logo";
 import { getLiveStatus, type LiveStatus } from "@/lib/live";
 import { verifyToken } from "@/lib/server-auth";
 import { STORIES } from "@/lib/stories";
-import { FansOnlineWidget } from "@/components/presence/FansOnlineWidget";
+import { FanLeaderboard } from "@/components/presence/FanLeaderboard";
 import Link from "next/link";
 import {
   getAllPosts,
@@ -279,7 +279,7 @@ function HomeContent({
               </div>
             </div>
 
-            <FansOnlineWidget />
+            <FanLeaderboard />
           </div>
         </aside>
       </div>

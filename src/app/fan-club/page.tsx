@@ -1,6 +1,7 @@
 import { Home } from "lucide-react";
 import Link from "next/link";
 import { FanCommunity } from "@/components/community/FanCommunity";
+import { FanLeaderboard } from "@/components/presence/FanLeaderboard";
 
 export default function FanClubPage() {
   return (
@@ -21,7 +22,10 @@ export default function FanClubPage() {
           </Link>
         </div>
       </header>
-      <main className="flex-1 overflow-hidden">
+      <div className="mx-auto w-full max-w-[960px] shrink-0 px-4 pt-4">
+        <FanLeaderboard />
+      </div>
+      <main className="min-h-0 flex-1">
         <FanCommunity />
       </main>
     </div>

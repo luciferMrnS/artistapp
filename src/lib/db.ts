@@ -2159,20 +2159,53 @@ export const PRESENCE_SWEEP_SECONDS = 5 * 60;
 
 /**
  * Upsert a "still here" heartbeat for the given user and opportunistically
- * sweep stale rows. Returns false (silently) if the table hasn't been
- * migrated yet — the UI then just shows 0.
+ * sweep stale rows. Each heartbeat also accumulates approximate online time
+ * (`online_minutes`) from the minutes elapsed since the last heartbeat —
+ * capped so spotty pings don't inflate the tally. Returns false (silently)
+ * if the table hasn't been migrated yet — the UI then just shows 0.
  */
 export async function touchPresence(userId: string): Promise<boolean> {
   try {
+    const now = new Date().toISOString();
+
+    // Read the previous heartbeat so we can accumulate online time.
+    const { data: existing, error: readError } = await supabaseAdmin
+      .from("user_presence")
+      .select("last_seen_at, online_minutes")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (readError) {
+      const columnMissing =
+        readError.code === "42703" ||
+        String(readError.message ?? "").includes("online_minutes");
+      if (!columnMissing && !isTableMissing(readError)) {
+        console.error("Error reading presence:", readError);
+      }
+    }
+
+    const elapsedMin = existing?.last_seen_at
+      ? Math.floor((Date.now() - new Date(existing.last_seen_at).getTime()) / 60_000)
+      : 0;
+    const onlineMinutes =
+      (existing?.online_minutes ?? 0) + Math.min(elapsedMin, 3);
+
     const { error } = await supabaseAdmin.from("user_presence").upsert(
-      { user_id: userId, last_seen_at: new Date().toISOString() },
+      { user_id: userId, last_seen_at: now, online_minutes: onlineMinutes },
       { onConflict: "user_id" }
     );
 
     if (error) {
-      if (isTableMissing(error)) return false;
-      console.error("Error touching presence:", error);
-      return false;
+      // migration_top_fans.sql may not be applied yet (no online_minutes
+      // column) — fall back to a plain heartbeat so presence still works.
+      const { error: retryError } = await supabaseAdmin
+        .from("user_presence")
+        .upsert({ user_id: userId, last_seen_at: now }, { onConflict: "user_id" });
+      if (retryError) {
+        if (isTableMissing(retryError)) return false;
+        console.error("Error touching presence:", error);
+        return false;
+      }
     }
 
     const sweepCutoff = new Date(
@@ -2215,6 +2248,159 @@ export async function countFansOnline(): Promise<number> {
     return Array.isArray(data) ? data.length : 0;
   } catch {
     return 0;
+  }
+}
+
+export interface OnlineFan {
+  id: string;
+  username: string;
+  avatar: string | null;
+}
+
+/**
+ * Fans whose heartbeat is still inside the online window, most recent first.
+ * Same fans-only rule as countFansOnline(). Returns [] on any error so the
+ * UI just shows an empty list.
+ */
+export async function listFansOnline(limit = 50): Promise<OnlineFan[]> {
+  try {
+    const cutoff = new Date(
+      Date.now() - PRESENCE_ONLINE_WINDOW_SECONDS * 1000
+    ).toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from("user_presence")
+      .select("users!inner(id, username, avatar)")
+      .gt("last_seen_at", cutoff)
+      .eq("users.role", "fan")
+      .order("last_seen_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error listing fans online:", error);
+      return [];
+    }
+
+    return (Array.isArray(data) ? data : [])
+      .map((row) => {
+        const resolved = (row as { users: OnlineFan | OnlineFan[] }).users;
+        const fan = Array.isArray(resolved) ? resolved[0] : resolved;
+        return fan
+          ? { id: fan.id, username: fan.username, avatar: fan.avatar }
+          : null;
+      })
+      .filter((fan): fan is OnlineFan => fan !== null);
+  } catch {
+    return [];
+  }
+}
+
+// ─── Top Fans (leaderboard) ──────────────────────────
+// Fans are ranked by the volume of their activity on the site: likes,
+// comments, creed (chat) interactions and accumulated online hours.
+
+export interface TopFan {
+  id: string;
+  username: string;
+  avatar: string | null;
+  email_verified: boolean;
+  likes: number;
+  comments: number;
+  chats: number;
+  onlineMinutes: number;
+  score: number;
+}
+
+/** Score weights — likes and comments lead, creed chats weigh in, online
+ *  time counts lightly (≈3 pts per hour). */
+const TOP_FAN_WEIGHTS = {
+  like: 5,
+  comment: 10,
+  chat: 2,
+  onlineMinute: 0.05,
+} as const;
+
+/**
+ * Fans ranked by total activity across likes, comments, creed messages and
+ * accumulated online minutes. The artist (or any non-fan) is never ranked.
+ * Returns [] if any of the involved tables haven't been migrated yet.
+ */
+export async function getTopFans(limit = 12): Promise<TopFan[]> {
+  try {
+    const [likeRes, commentRes, chatRes, onlineRes, usersRes] = await Promise.all([
+      supabaseAdmin.from("likes").select("user_id"),
+      supabaseAdmin.from("comments").select("user_id"),
+      supabaseAdmin.from("messages").select("user_id"),
+      supabaseAdmin.from("user_presence").select("user_id, online_minutes"),
+      supabaseAdmin
+        .from("users")
+        .select("id, username, avatar, email_verified")
+        .eq("role", "fan"),
+    ]);
+
+    const results = [likeRes, commentRes, chatRes, onlineRes, usersRes];
+    if (results.some((res) => isTableMissing(res.error))) return [];
+    if (
+      [likeRes, commentRes, chatRes, usersRes].some((res) => res.error) ||
+      (onlineRes.error && !isTableMissing(onlineRes.error)) ||
+      !usersRes.data
+    ) {
+      console.error(
+        "Error fetching top fans:",
+        results.map((res) => res.error?.message).filter(Boolean).join("; ")
+      );
+      return [];
+    }
+
+    const countBy = (rows: unknown[]) => {
+      const counts = new Map<string, number>();
+      for (const row of rows as Array<{ user_id: string }>) {
+        counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+      }
+      return counts;
+    };
+
+    const likes = countBy(likeRes.data ?? []);
+    const comments = countBy(commentRes.data ?? []);
+    const chats = countBy(chatRes.data ?? []);
+    const onlineRows = onlineRes.data as
+      | Array<{ user_id: string; online_minutes?: number }>
+      | null;
+    const online = new Map<string, number>(
+      (onlineRows ?? []).map((row) => [row.user_id, row.online_minutes ?? 0])
+    );
+
+    const fans = (usersRes.data as Array<{
+      id: string;
+      username: string;
+      avatar: string | null;
+      email_verified: boolean;
+    }>)
+      .map((user) => {
+        const score =
+          TOP_FAN_WEIGHTS.like * (likes.get(user.id) ?? 0) +
+          TOP_FAN_WEIGHTS.comment * (comments.get(user.id) ?? 0) +
+          TOP_FAN_WEIGHTS.chat * (chats.get(user.id) ?? 0) +
+          TOP_FAN_WEIGHTS.onlineMinute * (online.get(user.id) ?? 0);
+        return {
+          id: user.id,
+          username: user.username,
+          avatar: user.avatar,
+          email_verified: user.email_verified,
+          likes: likes.get(user.id) ?? 0,
+          comments: comments.get(user.id) ?? 0,
+          chats: chats.get(user.id) ?? 0,
+          onlineMinutes: online.get(user.id) ?? 0,
+          score: Math.round(score * 10) / 10,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return fans;
+  } catch {
+    return [];
   }
 }
 
