@@ -66,10 +66,9 @@ export async function PATCH(req: NextRequest) {
       const avatar = String(body.avatar).trim();
 
       if (avatar === "") {
-        // Reset to a default avatar when cleared
-        updates.avatar = `https://i.pravatar.cc/150?img=${Math.floor(
-          Math.random() * 70
-        )}`;
+        // Clearing the picture leaves it empty — the site shows its default
+        // placeholder until the user uploads their own.
+        updates.avatar = "";
       } else {
         try {
           const parsed = new URL(avatar);

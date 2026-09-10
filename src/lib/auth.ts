@@ -96,7 +96,7 @@ export function mockLogin(
     id: `user_${Math.random().toString(36).substr(2, 9)}`,
     email,
     username,
-    avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+    avatar: "",
     role: "fan",
     createdAt: new Date().toISOString(),
   };
@@ -149,7 +149,7 @@ export function mockSignup(
     id: `user_${Math.random().toString(36).substr(2, 9)}`,
     email,
     username,
-    avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+    avatar: "",
     role: "fan",
     createdAt: new Date().toISOString(),
   };

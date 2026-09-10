@@ -99,7 +99,7 @@ export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow
                 className="flex items-center gap-3 rounded-xl bg-black/40 px-3 py-2.5"
               >
                 <img
-                  src={resolveAvatarUrl(sub.avatar || `https://i.pravatar.cc/150?u=${sub.id}`)}
+                  src={resolveAvatarUrl(sub.avatar)}
                   alt={sub.username}
                   className="h-9 w-9 rounded-full object-cover"
                 />

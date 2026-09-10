@@ -280,7 +280,7 @@ function ProfilePageContent() {
                     </div>
                     <p className="mt-1 text-xs text-secondary">
                       Click the picture or “Upload photo” to choose a file, or
-                      reset to a default avatar.
+                      clear it to show the default placeholder.
                     </p>
                   </div>
                 </div>

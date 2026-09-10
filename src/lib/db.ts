@@ -264,7 +264,8 @@ export async function createUnverifiedUser({
       // Empty string (NOT a bcrypt hash) keeps the legacy login path from
       // ever treating it as a usable password.
       password_hash: "",
-      avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+      // No auto-assigned picture — stays empty until the user uploads one.
+      avatar: "",
       role,
       supabase_auth_id: supabaseAuthId,
       email_verified: false,
