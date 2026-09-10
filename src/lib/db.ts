@@ -830,6 +830,25 @@ export async function uploadAvatar(
   return { publicUrl: data.publicUrl };
 }
 
+/**
+ * Fetch a single avatar file so the app can serve it from its own domain
+ * instead of exposing the raw Supabase storage URL to clients.
+ */
+export async function downloadAvatarFile(
+  path: string
+): Promise<{ data?: Blob; error?: string }> {
+  const { data, error } = await supabaseAdmin.storage
+    .from(AVATARS_BUCKET)
+    .download(path);
+
+  if (error) {
+    console.error("Error downloading avatar:", error);
+    return { error: error.message };
+  }
+
+  return { data };
+}
+
 // ─── Theme Media ──────────────────────────────────────
 // Themed drop media (new-drop / behind-the-scenes / studio)
 // lives in a PUBLIC bucket so browser audio/video/photo

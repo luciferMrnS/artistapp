@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB — must match the API
 
@@ -135,7 +136,7 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
       <div className="flex gap-3">
         <div className="w-10 h-10 rounded-full bg-secondary overflow-hidden">
           <img
-            src={user.avatar}
+            src={resolveAvatarUrl(user.avatar)}
             alt={user.username}
             className="w-full h-full object-cover"
           />

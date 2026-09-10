@@ -10,6 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { NotificationWithActor } from "@/lib/db";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 function timeAgo(timestamp: string): string {
   const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -123,7 +124,7 @@ export function NotificationsFeed() {
                 <div className="flex items-center gap-2 text-sm text-white">
                   {notification.actor && (
                     <img
-                      src={notification.actor.avatar || "/default-avatar.png"}
+                      src={resolveAvatarUrl(notification.actor.avatar)}
                       alt={notification.actor.username}
                       className="h-5 w-5 rounded-full object-cover"
                     />

@@ -18,6 +18,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { NewsletterForm } from "@/components/dashboard/NewsletterForm";
 import { verifyToken } from "@/lib/server-auth";
 import { getArtistStats, getArtistFollowers, type ArtistStats, type SubscriberRow } from "@/lib/db";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -172,7 +173,7 @@ function DashboardContent({
                         {index === 0 ? <Crown className="h-4 w-4" /> : index + 1}
                       </span>
                       <img
-                        src={fan.avatar}
+                        src={resolveAvatarUrl(fan.avatar)}
                         alt={fan.username}
                         className="h-9 w-9 rounded-full object-cover"
                       />
@@ -280,7 +281,7 @@ function DashboardContent({
                       className="flex items-center gap-3 rounded-xl bg-black/40 px-3 py-2.5"
                     >
                       <img
-                        src={sub.avatar || `https://i.pravatar.cc/150?u=${sub.id}`}
+                        src={resolveAvatarUrl(sub.avatar || `https://i.pravatar.cc/150?u=${sub.id}`)}
                         alt={sub.username}
                         className="h-9 w-9 rounded-full object-cover"
                       />

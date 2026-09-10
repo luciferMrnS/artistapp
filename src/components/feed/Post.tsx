@@ -6,6 +6,7 @@ import { LikeButton } from "@/components/feed/LikeButton";
 import { CommentSection } from "@/components/feed/CommentSection";
 import { KebabMenu } from "@/components/ui/KebabMenu";
 import { useAuth } from "@/context/AuthContext";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 export interface PostAuthor {
   id: string;
@@ -70,7 +71,7 @@ export function Post({
       <div className="flex items-center justify-between px-4 mb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-secondary overflow-hidden">
-            <img src={author.avatar} alt={author.username} className="w-full h-full object-cover" />
+            <img src={resolveAvatarUrl(author.avatar)} alt={author.username} className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-1">

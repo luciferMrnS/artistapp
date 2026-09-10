@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Send, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 interface CommentSectionProps {
   postId: string;
@@ -113,7 +114,7 @@ export function CommentSection({
               <div key={comment.id} className="flex gap-2">
                 <div className="h-6 w-6 shrink-0 rounded-full overflow-hidden">
                   <img
-                    src={comment.author.avatar}
+                    src={resolveAvatarUrl(comment.author.avatar)}
                     alt={comment.author.username}
                     className="h-full w-full object-cover"
                   />
@@ -139,7 +140,7 @@ export function CommentSection({
           {user && (
             <div className="flex items-center gap-2 pt-2">
               <img
-                src={user.avatar}
+                src={resolveAvatarUrl(user.avatar)}
                 alt={user.username}
                 className="h-8 w-8 rounded-full"
               />

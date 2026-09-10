@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Send, Plus, Loader2, MessageCircle, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 interface DMChat {
   id: string;
@@ -313,7 +314,7 @@ export function DirectMessages() {
                       className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/5"
                     >
                       <img
-                        src={option.avatar || "/default-avatar.png"}
+                        src={resolveAvatarUrl(option.avatar)}
                         alt={option.username}
                         className="h-9 w-9 rounded-full object-cover"
                       />
@@ -354,7 +355,7 @@ export function DirectMessages() {
                   )}
                 >
                   <img
-                    src={convo.other_user.avatar}
+                    src={resolveAvatarUrl(convo.other_user.avatar)}
                     alt={convo.other_user.username}
                     className="h-10 w-10 shrink-0 rounded-full object-cover"
                   />
@@ -397,7 +398,7 @@ export function DirectMessages() {
           <>
             <div className="flex items-center gap-3 border-b border-border px-4 py-3">
               <img
-                src={active.recipient.avatar}
+                src={resolveAvatarUrl(active.recipient.avatar)}
                 alt={active.recipient.username}
                 className="h-9 w-9 rounded-full object-cover"
               />

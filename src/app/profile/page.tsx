@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 import {
   Camera,
   Upload,
@@ -217,7 +218,7 @@ function ProfilePageContent() {
                         </div>
                       ) : avatar.trim() !== "" && isValidImageUrl(avatar) ? (
                         <img
-                          src={avatar}
+                          src={resolveAvatarUrl(avatar)}
                           alt="Profile picture preview"
                           className="h-full w-full object-cover"
                           onError={(e) => {
@@ -248,13 +249,6 @@ function ProfilePageContent() {
                     <label className="block text-sm font-medium mb-2">
                       Profile picture
                     </label>
-                    <input
-                      type="url"
-                      value={avatar}
-                      onChange={(e) => setAvatar(e.target.value)}
-                      placeholder="Paste an image URL (https://…)"
-                      className="w-full rounded-lg border border-border bg-zinc-900 px-4 py-3 text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition"
-                    />
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         type="button"
@@ -285,8 +279,8 @@ function ProfilePageContent() {
                       )}
                     </div>
                     <p className="mt-1 text-xs text-secondary">
-                      Click the picture or “Upload photo” to choose a file, paste
-                      a URL, or reset to a default avatar.
+                      Click the picture or “Upload photo” to choose a file, or
+                      reset to a default avatar.
                     </p>
                   </div>
                 </div>
