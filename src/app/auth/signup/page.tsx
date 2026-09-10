@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import { Mail, Lock, ArrowRight, AlertCircle, UserCheck, Home } from "lucide-react";
+import { Mail, Lock, ArrowRight, AlertCircle, UserCheck, Home, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -182,13 +184,25 @@ export default function SignupPage() {
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-secondary" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 6 characters"
-                className="w-full bg-zinc-900 border border-border rounded-lg pl-12 pr-4 py-3 text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full bg-zinc-900 border border-border rounded-lg pl-12 pr-12 py-3 text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition"
                 disabled={isLoading}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary transition hover:text-white"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
             </div>
             {password && (
               <p className={`mt-2 text-xs ${password.length >= 6 ? "text-emerald-500" : "text-red-500"}`}>
@@ -203,13 +217,25 @@ export default function SignupPage() {
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-secondary" />
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm password"
-                className="w-full bg-zinc-900 border border-border rounded-lg pl-12 pr-4 py-3 text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full bg-zinc-900 border border-border rounded-lg pl-12 pr-12 py-3 text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition"
                 disabled={isLoading}
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary transition hover:text-white"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
             </div>
             {confirmPassword && (
               <p className={`mt-2 text-xs flex items-center gap-1 ${passwordsMatch ? "text-emerald-500" : "text-red-500"}`}>
