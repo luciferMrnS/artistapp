@@ -117,16 +117,25 @@ export interface NotificationWithActor extends Notification {
 
 // ─── Supabase Clients ──────────────────────────────
 
+// Placeholder values keep module import side-effect free: `next build` imports
+// route modules to collect their config, and at that point host secrets may
+// not be injected yet (Render/Vercel can keep them runtime-only). No query runs
+// during build collection, so a stub client is never used there; the real
+// process.env is read in the running server process, which always has the keys.
+const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
 // Server-side client - use SERVICE_ROLE_KEY for admin operations
 const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // ← Admin/secret key (server only)
+  SUPABASE_URL || "https://missing-config.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY || "no-key"
 );
 
 // Regular client - use ANON_KEY for auth operations
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY! // ← Public/publishable key (safe to expose)
+  SUPABASE_URL || "https://missing-config.supabase.co",
+  SUPABASE_ANON_KEY || "no-key"
 );
 
 // ─── Table-missing helper ─────────────────────────────
