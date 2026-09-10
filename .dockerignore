@@ -1,0 +1,23 @@
+# dependencies
+node_modules
+.next
+out
+build
+npm-debug.log*
+
+# git
+.git
+.gitignore
+
+# env / secrets — NEVER bake into the image
+.env
+.env.*
+
+# project docs / tooling not needed at runtime
+database
+task_progress.md
+e2e_test.ps1
+
+# misc
+.DS_Store
+*.pem

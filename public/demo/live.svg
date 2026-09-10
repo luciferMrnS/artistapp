@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c0505"/>
+      <stop offset="60%" stop-color="#9f1239"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <radialGradient id="spot" cx="30%" cy="0%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <rect width="1200" height="900" fill="url(#spot)"/>
+  <g opacity="0.35" stroke="#ffffff" stroke-width="10">
+    <line x1="150" y1="0" x2="420" y2="900"/>
+    <line x1="600" y1="0" x2="600" y2="900"/>
+    <line x1="1050" y1="0" x2="780" y2="900"/>
+  </g>
+  <g fill="#0c0a09" opacity="0.85">
+    <circle cx="380" cy="760" r="60"/>
+    <circle cx="560" cy="790" r="75"/>
+    <circle cx="760" cy="770" r="65"/>
+    <circle cx="930" cy="790" r="70"/>
+  </g>
+  <circle cx="600" cy="430" r="110" fill="#0c0a09" opacity="0.9"/>
+  <circle cx="600" cy="430" r="110" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.6"/>
+  <path d="M 560 430 q 40 -70 80 0 q -40 70 -80 0 Z" fill="#ffffff" opacity="0.9"/>
+  <text x="600" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">LIVE TONIGHT</text>
+</svg>

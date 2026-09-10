@@ -1,0 +1,27 @@
+# Render blueprint (optional): deploy from the repo root on Render. Secrets are
+# `sync: false` on purpose — set SUPABASE_*/JWT_SECRET in the Render dashboard,
+# never in this file.
+
+services:
+  - type: web
+    name: kendrickdavid
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://kendrickdavid.onrender.com
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://kendrickdavid.onrender.com
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
