@@ -17,7 +17,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { NewsletterForm } from "@/components/dashboard/NewsletterForm";
 import { SubscribersSection } from "@/components/dashboard/SubscribersSection";
 import { verifyToken } from "@/lib/server-auth";
-import { getArtistStats, getArtistFollowers, type ArtistStats, type SubscriberRow } from "@/lib/db";
+import { getArtistStats, getRegisteredFans, type ArtistStats, type RegisteredFanRow } from "@/lib/db";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 
 function formatCompactNumber(value: number): string {
@@ -67,10 +67,10 @@ function StatCard({
 
 function DashboardContent({
   stats,
-  subscribers,
+  fans,
 }: {
   stats: ArtistStats;
-  subscribers: SubscriberRow[];
+  fans: RegisteredFanRow[];
 }) {
   const maxEngagement = stats.topFans[0]?.total ?? 0;
   const maxPostEngagement = stats.posts.reduce(
@@ -260,8 +260,8 @@ function DashboardContent({
               )}
             </section>
 
-            {/* Subscribers list */}
-            <SubscribersSection subscribers={subscribers} />
+            {/* Fan accounts list */}
+            <SubscribersSection fans={fans} />
 
             {/* Newsletter */}
             <NewsletterForm />
@@ -279,15 +279,15 @@ export default async function DashboardPage() {
   if (!payload) redirect("/auth/login");
   if (payload.role !== "artist") redirect("/");
 
-  const [stats, subscribers] = await Promise.all([
+  const [stats, fans] = await Promise.all([
     getArtistStats(),
-    getArtistFollowers(),
+    getRegisteredFans(),
   ]);
   if (!stats) redirect("/");
 
   return (
     <ProtectedRoute>
-      <DashboardContent stats={stats} subscribers={subscribers} />
+      <DashboardContent stats={stats} fans={fans} />
     </ProtectedRoute>
   );
 }

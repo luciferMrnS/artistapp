@@ -8,27 +8,30 @@ import {
   EyeOff,
   Trash2,
   Loader2,
+  UserPlus,
+  UserRoundX,
 } from "lucide-react";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
-import type { SubscriberRow } from "@/lib/db";
+import type { RegisteredFanRow } from "@/lib/db";
 
 const PAGE_SIZE = 10;
 
 type Action = "restrict" | "unrestrict" | "delete";
 
 /**
- * Dashboard subscribers list — shows 10 at a time with a "View all" toggle,
- * plus artist controls to set a fan to view-only or delete their account.
+ * Dashboard fan-accounts list — shows 10 at a time with a "View all" toggle,
+ * plus artist controls to set any fan (subscribed or not) to view-only or
+ * delete their account.
  */
-export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow[] }) {
-  const [items, setItems] = useState<SubscriberRow[]>(subscribers);
+export function SubscribersSection({ fans }: { fans: RegisteredFanRow[] }) {
+  const [items, setItems] = useState<RegisteredFanRow[]>(fans);
   const [showAll, setShowAll] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
 
   const visible = showAll ? items : items.slice(0, PAGE_SIZE);
 
-  const runAction = async (sub: SubscriberRow, action: Action) => {
+  const runAction = async (sub: RegisteredFanRow, action: Action) => {
     setActionError("");
 
     if (action === "delete") {
@@ -73,7 +76,7 @@ export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow
   return (
     <section className="rounded-2xl border border-border bg-zinc-900 p-5">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Users className="h-5 w-5 text-sky-400" /> Subscribers
+        <Users className="h-5 w-5 text-sky-400" /> Fan accounts
         <span className="ml-auto rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-secondary">
           {items.length}
         </span>
@@ -87,7 +90,7 @@ export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow
 
       {items.length === 0 ? (
         <p className="text-sm text-secondary">
-          No subscribers yet — fans who hit "Subscribe" will appear here.
+          No fan accounts yet — people who register will appear here.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -119,11 +122,27 @@ export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow
                         <EyeOff className="h-3 w-3" /> View-only
                       </span>
                     )}
+                    {!restricted && (
+                      <span
+                        title={sub.subscribed ? "Subscribed to the artist" : "Not subscribed"}
+                        className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-secondary"
+                      >
+                        {sub.subscribed ? (
+                          <>
+                            <UserPlus className="h-3 w-3 text-emerald-400" /> Subscribed
+                          </>
+                        ) : (
+                          <>
+                            <UserRoundX className="h-3 w-3" /> Not subscribed
+                          </>
+                        )}
+                      </span>
+                    )}
                   </p>
                   <p className="truncate text-xs text-secondary">{sub.email}</p>
                 </div>
                 <span className="hidden shrink-0 text-[11px] text-secondary sm:block">
-                  {new Date(sub.subscribed_at).toLocaleDateString()}
+                  {new Date(sub.subscribed_at ?? sub.created_at).toLocaleDateString()}
                 </span>
 
                 {/* Artist controls */}
@@ -171,7 +190,7 @@ export function SubscribersSection({ subscribers }: { subscribers: SubscriberRow
           onClick={() => setShowAll((v) => !v)}
           className="mt-3 w-full rounded-lg border border-border bg-zinc-900 py-2 text-sm font-medium text-secondary transition hover:border-primary/40 hover:text-white"
         >
-          {showAll ? "Show less" : `View all ${items.length} subscribers`}
+          {showAll ? "Show less" : `View all ${items.length} fans`}
         </button>
       )}
     </section>

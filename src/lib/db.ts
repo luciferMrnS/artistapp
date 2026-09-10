@@ -1714,6 +1714,74 @@ export async function getArtistFollowers(): Promise<SubscriberRow[]> {
       subscribed_at: row.created_at,
     }));
 }
+
+export interface RegisteredFanRow {
+  id: string;
+  username: string;
+  email: string;
+  avatar: string;
+  email_verified: boolean;
+  restricted_at: string | null;
+  subscribed: boolean;
+  subscribed_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Every registered fan account (subscribed or not) so the artist can
+ * restrict or delete any of them — not just subscribers.
+ * Sorted subscribers first, then by join date (newest first).
+ */
+export async function getRegisteredFans(): Promise<RegisteredFanRow[]> {
+  const artist = await getArtistUser();
+
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select(
+      "id, username, email, avatar, email_verified, restricted_at, created_at"
+    )
+    .eq("role", "fan")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching registered fans:", error);
+    return [];
+  }
+
+  let subscribedAt = new Map<string, string>();
+  if (artist) {
+    const { data: follows, error: followError } = await supabaseAdmin
+      .from("follows")
+      .select("follower_id, created_at")
+      .eq("following_id", artist.id);
+
+    if (!followError) {
+      subscribedAt = new Map(
+        (follows ?? []).map((f) => [
+          f.follower_id as string,
+          f.created_at as string,
+        ])
+      );
+    }
+  }
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    username: string;
+    email: string;
+    avatar: string;
+    email_verified: boolean;
+    restricted_at: string | null;
+    created_at: string;
+  }>)
+    .filter((fan) => fan.id !== artist?.id)
+    .map((fan) => ({
+      ...fan,
+      subscribed: subscribedAt.has(fan.id),
+      subscribed_at: subscribedAt.get(fan.id) ?? null,
+    }))
+    .sort((a, b) => Number(b.subscribed) - Number(a.subscribed));
+}
 export async function getFollowing(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("follows")
