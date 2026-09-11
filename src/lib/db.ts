@@ -2889,6 +2889,12 @@ export async function getUsersForDirectMessage(userId: string) {
 // uploads. Real-time delivery via Supabase Realtime with
 // a polling fallback in the browser.
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  me: boolean;
+}
+
 export interface Message {
   id: string;
   user_id: string;
@@ -2897,6 +2903,8 @@ export interface Message {
   content: string;
   message_type: "text" | "gif" | "image" | "sticker";
   media_url: string | null;
+  reply_to_id?: string | null;
+  reactions?: MessageReaction[];
   created_at: string;
 }
 
@@ -2905,7 +2913,10 @@ export const COMMUNITY_MEDIA_BUCKET = "community-media";
 /**
  * Fetch the most recent messages (newest last) for the chat
  */
-export async function getRecentMessages(limit = 100): Promise<Message[]> {
+export async function getRecentMessages(
+  limit = 100,
+  viewerId: string | null = null
+): Promise<Message[]> {
   const { data, error } = await supabaseAdmin
     .from("messages")
     .select("*")
@@ -2917,10 +2928,67 @@ export async function getRecentMessages(limit = 100): Promise<Message[]> {
     return [];
   }
 
-  return ((data ?? []) as Message[]).map((msg) => ({
+  const messages = ((data ?? []) as Message[]).map((msg) => ({
     ...msg,
     media_url: resolveCommunityMediaUrl(msg.media_url),
   }));
+
+  const ids = messages.map((m) => m.id);
+  const reactionsByMessage = await getMessageReactionsFor(ids, viewerId);
+
+  return messages.map((msg) => ({
+    ...msg,
+    reactions: reactionsByMessage[msg.id] ?? [],
+  }));
+}
+
+/**
+ * Aggregate reactions for a batch of messages into
+ * `{ [messageId]: MessageReaction[] }`. Degrades to all-empty when the
+ * reaction table migration hasn't been applied yet.
+ */
+export async function getMessageReactionsFor(
+  messageIds: string[],
+  viewerId: string | null
+): Promise<Record<string, MessageReaction[]>> {
+  const result: Record<string, MessageReaction[]> = {};
+  for (const id of messageIds) result[id] = [];
+  if (messageIds.length === 0) return result;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("message_reactions")
+      .select("message_id, user_id, emoji")
+      .in("message_id", messageIds);
+
+    if (error) {
+      if (isTableMissing(error)) return result;
+      console.error("Error fetching message reactions:", error);
+      return result;
+    }
+
+    const grouped = new Map<string, Map<string, MessageReaction>>();
+    for (const row of data ?? []) {
+      const set = grouped.get(row.message_id) ?? new Map<string, MessageReaction>();
+      const existing = set.get(row.emoji) ?? {
+        emoji: row.emoji,
+        count: 0,
+        me: false,
+      };
+      existing.count += 1;
+      if (viewerId && row.user_id === viewerId) existing.me = true;
+      set.set(row.emoji, existing);
+      grouped.set(row.message_id, set);
+    }
+
+    for (const [messageId, set] of grouped) {
+      result[messageId] = [...set.values()];
+    }
+  } catch (err) {
+    console.error("getMessageReactionsFor error:", err);
+  }
+
+  return result;
 }
 
 /**
@@ -2932,24 +3000,46 @@ export async function createMessage(
   avatar: string | null,
   content: string,
   messageType: Message["message_type"] = "text",
-  mediaUrl: string | null = null
+  mediaUrl: string | null = null,
+  replyToId: string | null = null
 ): Promise<Message | { error: string }> {
-  const newMessage = {
-    id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  const id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const created_at = new Date().toISOString();
+
+  // Only the real table columns — `reactions`/`reply_to_id` are app-level
+  // fields that don't exist in the underlying row.
+  const insertRow: Record<string, unknown> = {
+    id,
     user_id: userId,
     username,
     avatar,
     content,
     message_type: messageType,
     media_url: mediaUrl,
-    created_at: new Date().toISOString(),
+    created_at,
   };
+  if (replyToId) insertRow.reply_to_id = replyToId;
 
   const { data, error } = await supabaseAdmin
     .from("messages")
-    .insert([newMessage])
+    .insert([insertRow])
     .select()
     .single();
+
+  // reply_to_id column comes from migration_creed_interactions.sql — if it
+  // isn't applied yet, fall back to a plain message instead of failing.
+  if (error && replyToId && error.code === "42703") {
+    const retry = await supabaseAdmin
+      .from("messages")
+      .insert([{ ...insertRow, reply_to_id: undefined }])
+      .select()
+      .single();
+    if (retry.error) {
+      console.error("Error creating message:", retry.error);
+      return { error: retry.error.message || "Failed to send message" };
+    }
+    return retry.data as Message;
+  }
 
   if (error) {
     console.error("Error creating message:", error);
@@ -2957,6 +3047,63 @@ export async function createMessage(
   }
 
   return data as Message;
+}
+
+/**
+ * Add the current user's emoji reaction to a message.
+ * Returns the message's updated reaction summary.
+ */
+export async function addMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<MessageReaction[] | { error: string }> {
+  const { error } = await supabaseAdmin
+    .from("message_reactions")
+    .upsert(
+      {
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: "message_id,user_id,emoji" }
+    );
+
+  if (error) {
+    if (isTableMissing(error)) return { error: "Reactions aren't enabled yet" };
+    console.error("Error adding reaction:", error);
+    return { error: error.message || "Failed to add reaction" };
+  }
+
+  const updated = await getMessageReactionsFor([messageId], userId);
+  return updated[messageId] ?? [];
+}
+
+/**
+ * Remove the current user's emoji reaction from a message.
+ * Returns the message's updated reaction summary.
+ */
+export async function removeMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<MessageReaction[] | { error: string }> {
+  const { error } = await supabaseAdmin
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+
+  if (error) {
+    if (isTableMissing(error)) return { error: "Reactions aren't enabled yet" };
+    console.error("Error removing reaction:", error);
+    return { error: error.message || "Failed to remove reaction" };
+  }
+
+  const updated = await getMessageReactionsFor([messageId], userId);
+  return updated[messageId] ?? [];
 }
 
 /**
