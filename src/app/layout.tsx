@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Bangers } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 import { PwaSetup } from "@/components/pwa/PwaSetup";
+import { SelfKeepAlive } from "@/components/SelfKeepAlive";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full bg-black text-white">
         <AuthProvider>
           <PresenceHeartbeat />
+          <SelfKeepAlive />
           <PwaSetup />
           {children}
         </AuthProvider>

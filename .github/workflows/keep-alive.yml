@@ -11,4 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Render app
-        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://kendrickdavid.onrender.com/
+        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://kendrickdavid.onrender.com/api/health
