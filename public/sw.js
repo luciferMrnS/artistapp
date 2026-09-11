@@ -95,6 +95,7 @@ self.addEventListener("push", (event) => {
   const url = (data.data && data.data.url) || "/";
   const badgeCount = (data.data && parseInt(data.data.badgeCount || "0", 10)) || 0;
   const isAlert = data.tag === HARD_ALERT_TAG;
+  const isInteraction = data.data && data.data.type === "interaction";
   const tag = data.tag || PUSH_TAG;
 
   const notificationOptions = {
@@ -133,8 +134,9 @@ self.addEventListener("push", (event) => {
       })
       .catch(() => show())
       .then(() => {
-        // Hard alerts don't touch the unread badge.
-        if (isAlert) return;
+        // Hard alerts and interaction notices don't carry an unread total —
+        // never let them clobber the red badge on the home-screen icon.
+        if (isAlert || isInteraction) return;
         // Red count bubble on the home-screen icon (Android/desktop only).
         if ("setAppBadge" in self.navigator) {
           if (badgeCount > 0) self.navigator.setAppBadge(badgeCount);

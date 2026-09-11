@@ -3,9 +3,12 @@ import {
   addMessageReaction,
   removeMessageReaction,
   getMessageReactionsFor,
+  getMessageById,
+  findUserById,
   type MessageReaction,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
+import { sendInteractionPush } from "@/lib/push";
 
 /**
  * POST /api/messages/[id]/reactions
@@ -36,12 +39,31 @@ export async function POST(
       (r) => r.emoji === emoji && r.me
     );
 
+    const adding = !alreadyReacted;
+
     const updated: MessageReaction[] | { error: string } = alreadyReacted
       ? await removeMessageReaction(messageId, user.userId, emoji)
       : await addMessageReaction(messageId, user.userId, emoji);
 
     if ("error" in updated) {
       return NextResponse.json({ error: updated.error }, { status: 400 });
+    }
+
+    // Notify the message author — "Your message got a reaction {emoji}" —
+    // only when a reaction is added (not removed) and not on their own message.
+    if (adding) {
+      Promise.resolve()
+        .then(async () => {
+          const target = await getMessageById(messageId);
+          if (!target || target.user_id === user.userId) return;
+          const actor = await findUserById(user.userId);
+          await sendInteractionPush({
+            userId: target.user_id,
+            title: `Your message got a reaction ${emoji}`,
+            body: `@${actor?.username ?? "Someone"} reacted to your message`,
+          });
+        })
+        .catch((err) => console.error("Reaction push failed:", err));
     }
 
     return NextResponse.json({ success: true, reactions: updated }, { status: 200 });

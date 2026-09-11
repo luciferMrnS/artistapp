@@ -3110,6 +3110,25 @@ export async function getRecentMessages(
 }
 
 /**
+ * Fetch a single community message by id (used to find the author of a
+ * message being replied to or reacted on).
+ */
+export async function getMessageById(messageId: string): Promise<Message | null> {
+  if (!messageId) return null;
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .select("*")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching message:", error);
+    return null;
+  }
+  return (data as Message) ?? null;
+}
+
+/**
  * Aggregate reactions for a batch of messages into
  * `{ [messageId]: MessageReaction[] }`. Degrades to all-empty when the
  * reaction table migration hasn't been applied yet.

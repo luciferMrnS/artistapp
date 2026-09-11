@@ -21,6 +21,7 @@ if (vapidConfigured) {
 
 export const PUSH_TAG = "kendrick-unread";
 export const HARD_ALERT_TAG = "kendrick-alert";
+export const INTERACTION_TAG = "kendrick-interaction";
 
 // Hard alerts carry the full message text in the push body, which is
 // VAPID-encrypted and capped at ~4KB by the platform. Keep messages short
@@ -116,6 +117,60 @@ export async function sendUnreadPush({ trigger, url, userId }: SendOptions) {
 /** Reset the recipient's Creed baseline — call when they open the chat. */
 export async function markCreedReadForUser(userId: string) {
   await markCreedReadServer(userId);
+}
+
+/**
+ * Send a targeted "someone interacted with your message" notification to a
+ * single user's devices (reply / reaction in Creed). Uses its own tag so it
+ * shows separately from the generic unread banner, and auto-dismisses like a
+ * normal notification instead of pinning to the screen like a hard alert.
+ */
+export async function sendInteractionPush({
+  userId,
+  title,
+  body,
+  url = "/fan-club",
+}: {
+  userId: string;
+  title: string;
+  body: string;
+  url?: string;
+}) {
+  if (!vapidConfigured) {
+    console.warn("VAPID keys not configured — skipping interaction push");
+    return;
+  }
+
+  try {
+    const subscriptions = await getPushSubscriptionsForUser(userId);
+    if (subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      tag: INTERACTION_TAG,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url, badgeCount: 0, type: "interaction" },
+      timestamp: Date.now(),
+    });
+
+    const results = await Promise.allSettled(
+      subscriptions.map((sub) =>
+        webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
+          payload
+        )
+      )
+    );
+
+    cleanupDeadSubscriptions(subscriptions, results);
+  } catch (err) {
+    console.error("Failed to send interaction push:", err);
+  }
 }
 
 /**

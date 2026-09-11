@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createMessage, getRecentMessages, findUserById, isUserRestricted } from "@/lib/db";
+import {
+  createMessage,
+  getMessageById,
+  getRecentMessages,
+  findUserById,
+  isUserRestricted,
+} from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
-import { sendCreedPushToEveryone } from "@/lib/push";
+import { sendCreedPushToEveryone, sendInteractionPush } from "@/lib/push";
 
 export async function GET() {
   try {
@@ -47,6 +53,22 @@ export async function POST(req: NextRequest) {
     Promise.resolve()
       .then(() => sendCreedPushToEveryone({ exceptUserId: user.userId }))
       .catch((err) => console.error("Creed push failed:", err));
+
+    // If this is a reply, notify the author of the original message —
+    // "Your message was replied to" — unless they replied to themselves.
+    if (typeof replyToId === "string" && replyToId) {
+      Promise.resolve()
+        .then(async () => {
+          const repliedTo = await getMessageById(replyToId);
+          if (!repliedTo || repliedTo.user_id === user.userId) return;
+          await sendInteractionPush({
+            userId: repliedTo.user_id,
+            title: "Your message was replied to",
+            body: `@${username} replied to your message in Creed`,
+          });
+        })
+        .catch((err) => console.error("Reply push failed:", err));
+    }
 
     return NextResponse.json({ success: true, message: result }, { status: 201 });
   } catch (error) {
