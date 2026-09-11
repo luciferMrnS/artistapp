@@ -3474,7 +3474,8 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionRow[]> 
   try {
     const { data, error } = await supabaseAdmin
       .from("push_subscriptions")
-      .select("id, user_id, endpoint, p256dh, auth");
+      .select("id, user_id, endpoint, p256dh, auth")
+      .limit(10000);
     if (error) {
       if (isTableMissing(error)) return [];
       console.error("Error fetching all push subscriptions:", error);
@@ -3484,6 +3485,63 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionRow[]> 
   } catch (err) {
     console.error("Failed to fetch all push subscriptions:", err);
     return [];
+  }
+}
+
+/** Aggregate view of what's in push_subscriptions (for the admin diagnoser). */
+export async function getPushSubscriptionStats(): Promise<{
+  total: number;
+  distinctUsers: number;
+  byProvider: Record<string, number>;
+  newestAt: string | null;
+  oldestAt: string | null;
+}> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("user_id, endpoint, created_at")
+      .limit(10000);
+    if (error) {
+      if (isTableMissing(error)) {
+        return { total: 0, distinctUsers: 0, byProvider: {}, newestAt: null, oldestAt: null };
+      }
+      console.error("Error fetching push subscription stats:", error);
+      return { total: 0, distinctUsers: 0, byProvider: {}, newestAt: null, oldestAt: null };
+    }
+
+    const rows = (data ?? []) as { user_id: string; endpoint: string; created_at: string | null }[];
+    const byProvider: Record<string, number> = {};
+    const userIds = new Set<string>();
+    let newestAt: string | null = null;
+    let oldestAt: string | null = null;
+
+    for (const row of rows) {
+      userIds.add(row.user_id);
+      let host = "other";
+      try {
+        host = new URL(row.endpoint).host;
+      } catch {
+        /* keep "other" */
+      }
+      byProvider[host] = (byProvider[host] ?? 0) + 1;
+
+      const at = row.created_at;
+      if (at) {
+        if (newestAt === null || at > newestAt) newestAt = at;
+        if (oldestAt === null || at < oldestAt) oldestAt = at;
+      }
+    }
+
+    return {
+      total: rows.length,
+      distinctUsers: userIds.size,
+      byProvider,
+      newestAt,
+      oldestAt,
+    };
+  } catch (err) {
+    console.error("Failed to fetch push subscription stats:", err);
+    return { total: 0, distinctUsers: 0, byProvider: {}, newestAt: null, oldestAt: null };
   }
 }
 

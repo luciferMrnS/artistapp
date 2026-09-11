@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { HardAlertForm } from "@/components/dashboard/HardAlertForm";
+import { AlertStatus } from "@/components/dashboard/AlertStatus";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/server-auth";
@@ -23,8 +24,9 @@ function AlertPageContent() {
             </div>
           </header>
 
-          <div className="mx-auto max-w-[680px] p-6 pb-16">
+          <div className="mx-auto max-w-[680px] p-6 pb-16 space-y-6">
             <HardAlertForm />
+            <AlertStatus />
           </div>
         </main>
       </div>
