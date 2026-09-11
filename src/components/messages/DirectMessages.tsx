@@ -9,6 +9,7 @@ import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 
 interface DMChat {
   id: string;
@@ -78,6 +79,11 @@ export function DirectMessages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
+
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
+  const emojiToggleRef = useRef<HTMLButtonElement>(null);
+
+  useDismissOnClickOutside(showEmoji, () => setShowEmoji(false), emojiPanelRef, emojiToggleRef);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -525,6 +531,7 @@ export function DirectMessages() {
                   <AnimatePresence>
                     {showEmoji && (
                       <motion.div
+                        ref={emojiPanelRef}
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -546,6 +553,7 @@ export function DirectMessages() {
                     }}
                   >
                     <button
+                      ref={emojiToggleRef}
                       type="button"
                       onClick={() => setShowEmoji((v) => !v)}
                       className={cn(

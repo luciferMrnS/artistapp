@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Send, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
+import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 
 interface CommentSectionProps {
   postId: string;
@@ -41,6 +42,16 @@ export function CommentSection({
   const [showEmoji, setShowEmoji] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
+  const emojiToggleRef = useRef<HTMLButtonElement>(null);
+
+  useDismissOnClickOutside(
+    showEmoji,
+    () => setShowEmoji(false),
+    emojiPanelRef,
+    emojiToggleRef
+  );
 
   const toggleExpanded = async () => {
     if (!expanded) {
@@ -158,7 +169,7 @@ export function CommentSection({
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   {showEmoji && (
-                    <div className="relative">
+                    <div ref={emojiPanelRef} className="relative">
                       <div className="absolute bottom-full left-0 z-10 mb-2 w-[320px] rounded-xl border border-border bg-zinc-900 p-2 shadow-xl">
                         <EmojiPicker
                           onPick={(emoji) =>
@@ -169,6 +180,7 @@ export function CommentSection({
                     </div>
                   )}
                   <button
+                    ref={emojiToggleRef}
                     type="button"
                     onClick={() => setShowEmoji((v) => !v)}
                     className={cn(

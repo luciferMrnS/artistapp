@@ -11,6 +11,7 @@ import { Lightbox } from "@/components/ui/Lightbox";
 import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
+import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 
 interface MessageReaction {
   emoji: string;
@@ -262,6 +263,15 @@ export function FanCommunity() {
   const [reactFor, setReactFor] = useState<Message | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
+  const emojiToggleRef = useRef<HTMLButtonElement>(null);
+
+  useDismissOnClickOutside(
+    showEmoji,
+    () => setShowEmoji(false),
+    emojiPanelRef,
+    emojiToggleRef
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -345,6 +355,7 @@ export function FanCommunity() {
     const content = input.trim();
     const replyId = replyTo?.id ?? null;
     setInput("");
+    setShowEmoji(false);
     setIsSending(true);
 
     // Additional validation to ensure content is meaningful
@@ -491,6 +502,7 @@ export function FanCommunity() {
       <AnimatePresence>
         {showEmoji && (
           <motion.div
+            ref={emojiPanelRef}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -586,7 +598,7 @@ export function FanCommunity() {
             />
           ) : (
             <>
-              <button onClick={() => setShowEmoji(!showEmoji)}
+              <button ref={emojiToggleRef} onClick={() => setShowEmoji(!showEmoji)}
                 className={cn("rounded-full p-2 transition", showEmoji ? "bg-primary text-white" : "text-secondary hover:bg-white/10")}>
                 <Smile className="h-5 w-5" />
               </button>

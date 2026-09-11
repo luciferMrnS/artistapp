@@ -14,6 +14,7 @@ import { UploadProgress } from "@/components/ui/UploadProgress";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { useFeed, type FeedPostData } from "@/components/feed/FeedContext";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
+import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB — must match the API
 
@@ -34,6 +35,15 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const emojiPanelRef = useRef<HTMLDivElement>(null);
+  const emojiToggleRef = useRef<HTMLButtonElement>(null);
+
+  useDismissOnClickOutside(
+    showEmoji,
+    () => setShowEmoji(false),
+    emojiPanelRef,
+    emojiToggleRef
+  );
 
   // Basic URL sanity check for the optional image attachment
   const isValidImageUrl = (url: string) => {
@@ -250,13 +260,14 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
               </div>
             )}
             {showEmoji && (
-              <div className="mt-3 rounded-xl border border-border bg-zinc-900 p-2">
+              <div ref={emojiPanelRef} className="mt-3 rounded-xl border border-border bg-zinc-900 p-2">
                 <EmojiPicker onPick={(emoji) => setContent((prev) => prev + emoji)} />
               </div>
             )}
             <div className="mt-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button
+                  ref={emojiToggleRef}
                   type="button"
                   onClick={() => setShowEmoji((v) => !v)}
                   className={cn(
