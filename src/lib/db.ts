@@ -616,7 +616,24 @@ export async function getAllPosts(): Promise<PostWithAuthor[]> {
     return [];
   }
 
-  return data as unknown as PostWithAuthor[];
+  const posts = data as unknown as PostWithAuthor[];
+  return reconcileCommentsCounts(posts);
+}
+
+/**
+ * Posts sometimes hold a stale `comments_count` (the column is incremented on
+ * create but updated inconsistently on deletes). Reading the real counts from
+ * the comments table keeps displayed numbers honest everywhere.
+ */
+async function reconcileCommentsCounts(
+  posts: PostWithAuthor[]
+): Promise<PostWithAuthor[]> {
+  if (posts.length === 0) return posts;
+  const counts = await getCommentsCountForPosts(posts.map((p) => p.id));
+  return posts.map((p) => ({
+    ...p,
+    comments_count: counts[p.id] ?? 0,
+  }));
 }
 
 /**
@@ -644,7 +661,8 @@ export async function getPostsByAuthor(
     return [];
   }
 
-  return data as unknown as PostWithAuthor[];
+  const posts = data as unknown as PostWithAuthor[];
+  return reconcileCommentsCounts(posts);
 }
 
 /**
@@ -671,7 +689,9 @@ export async function getPostById(id: string): Promise<PostWithAuthor | null> {
     return null;
   }
 
-  return data as unknown as PostWithAuthor;
+  const post = data as unknown as PostWithAuthor;
+  const counts = await getCommentsCountForPosts([post.id]);
+  return { ...post, comments_count: counts[post.id] ?? 0 };
 }
 
 /**
@@ -1465,6 +1485,29 @@ export async function getLikesForPost(postId: string) {
 // ─── Comment Functions ─────────────────────────────
 
 /**
+ * Real number of comments currently stored for each post id.
+ */
+export async function getCommentsCountForPosts(
+  postIds: string[]
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  if (postIds.length === 0) return result;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("comments")
+      .select("post_id");
+    if (error) return result;
+    for (const row of data ?? []) {
+      const pid = row.post_id as string;
+      result[pid] = (result[pid] ?? 0) + 1;
+    }
+  } catch (err) {
+    console.error("Error counting comments:", err);
+  }
+  return result;
+}
+
+/**
  * Get all comments for a post (with author info)
  */
 export async function getCommentsForPost(
@@ -1537,15 +1580,22 @@ export async function deleteComment(
   commentId: string,
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("comments")
     .delete()
     .eq("id", commentId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("post_id");
 
   if (error) {
     console.error("Error deleting comment:", error);
     return { success: false, error: error.message || "Failed to delete comment" };
+  }
+
+  // Keep the counter honest when a comment is actually removed.
+  if (data && data.length > 0) {
+    const postId = (data[0] as { post_id?: string }).post_id;
+    if (postId) await incrementPostCounter(postId, "comments_count", -1);
   }
 
   return { success: true };
