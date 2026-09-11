@@ -318,8 +318,12 @@ export function FanCommunity() {
   }, []);
 
   useEffect(() => {
-    // Opening the creed clears the unread badge baseline on the sidebar.
+    // Opening the creed clears the unread badge baseline on the sidebar
+    // and the server-side baseline so push totals stay accurate.
     markCreedRead();
+    fetch("/api/creed/read", { method: "POST", credentials: "include" }).catch(
+      () => {}
+    );
 
     let cancelled = false;
     const fetchData = async () => {

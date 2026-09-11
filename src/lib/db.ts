@@ -3228,3 +3228,175 @@ export function resolveCommunityMediaUrl(
 
   return mediaUrl;
 }
+
+// ─── Push Notifications ─────────────────────────────
+
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Save (or refresh) a device's web-push subscription for a user.
+ * `endpoint` is unique per device — re-subscribing updates the row.
+ */
+export async function savePushSubscription(
+  userId: string,
+  subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }
+): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin.from("push_subscriptions").upsert(
+      {
+        user_id: userId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "endpoint" }
+    );
+    if (error) {
+      if (isTableMissing(error)) return false;
+      console.error("Error saving push subscription:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to save push subscription:", err);
+    return false;
+  }
+}
+
+/** All push subscriptions belonging to a user (may be several devices). */
+export async function getPushSubscriptionsForUser(
+  userId: string
+): Promise<PushSubscriptionRow[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("id, user_id, endpoint, p256dh, auth")
+      .eq("user_id", userId);
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching push subscriptions:", error);
+      return [];
+    }
+    return (data ?? []) as PushSubscriptionRow[];
+  } catch (err) {
+    console.error("Failed to fetch push subscriptions:", err);
+    return [];
+  }
+}
+
+/** Delete a subscription (e.g. 404/410 from the push provider). */
+export async function removePushSubscription(
+  endpoint: string
+): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from("push_subscriptions")
+      .delete()
+      .eq("endpoint", endpoint);
+  } catch (err) {
+    console.error("Failed to remove push subscription:", err);
+  }
+}
+
+/** Every distinct user who has at least one live push subscription. */
+export async function getPushSubscriptionUserIds(): Promise<string[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("user_id");
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching push user ids:", error);
+      return [];
+    }
+    return [...new Set((data ?? []).map((r) => r.user_id as string))];
+  } catch (err) {
+    console.error("Failed to fetch push user ids:", err);
+    return [];
+  }
+}
+
+/**
+ * Record that the user just opened the Creed chat. Resets the server-side
+ * "unread creed" baseline used to build the push-notification totals.
+ */
+export async function markCreedReadServer(userId: string): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from("users")
+      .update({ creed_last_read_at: new Date().toISOString() })
+      .eq("id", userId);
+  } catch (err) {
+    console.error("Error marking creed read:", err);
+  }
+}
+
+/** Number of creed messages newer than the user's last opened time. */
+export async function getCreedUnreadCount(userId: string): Promise<number> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .select("creed_last_read_at")
+      .eq("id", userId)
+      .single();
+    if (error || !data) return 0;
+
+    const lastRead = data.creed_last_read_at as string | null;
+    let query = supabaseAdmin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .neq("user_id", userId);
+    if (lastRead) query = query.gt("created_at", lastRead);
+
+    const { count } = await query;
+    return count ?? 0;
+  } catch (err) {
+    console.error("Error counting creed unread:", err);
+    return 0;
+  }
+}
+
+/** Number of incoming DMs the user hasn't opened yet. */
+export async function getDmUnreadCount(userId: string): Promise<number> {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from("direct_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", userId)
+      .eq("read", false);
+    if (error) {
+      if (isTableMissing(error)) return 0;
+      console.error("Error counting dm unread:", error);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (err) {
+    console.error("Failed to count dm unread:", err);
+    return 0;
+  }
+}
+
+/** Combined unread total (Creed + DMs) for push notifications. */
+export async function getCombinedUnreadCount(userId: string): Promise<{
+  total: number;
+  creed: number;
+  dm: number;
+}> {
+  const [creed, dm] = await Promise.all([
+    getCreedUnreadCount(userId),
+    getDmUnreadCount(userId),
+  ]);
+  return { total: creed + dm, creed, dm };
+}

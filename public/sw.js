@@ -62,3 +62,78 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+const PUSH_TAG = "kendrick-unread";
+
+/**
+ * Is the user actively looking at the surface this push is about? If so,
+ * suppress the banner so chatting isn't spammed by your own view.
+ */
+function isViewingRelevantPage(url, payloadUrl) {
+  if (!payloadUrl) return false;
+  if (payloadUrl === "/fan-club") {
+    return url.pathname.startsWith("/fan-club");
+  }
+  if (payloadUrl === "/messages") {
+    return url.pathname.startsWith("/messages");
+  }
+  return false;
+}
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    /* fall through to the default payload */
+  }
+
+  const title = data.title || "Kendrick David";
+  const body = data.body || "You have new messages";
+  const url = (data.data && data.data.url) || "/";
+
+  const show = () =>
+    self.registration.showNotification(title, {
+      body,
+      tag: PUSH_TAG,
+      icon: data.icon || "/icon-192.png",
+      badge: data.badge || "/icon-192.png",
+      data: { url },
+    });
+
+  // A focused client already on the relevant page? Skip the banner.
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const viewing = clients.some(
+          (client) =>
+            client.focused &&
+            (client.visibilityState === "visible" || client.visibilityState === "prerender") &&
+            isViewingRelevantPage(new URL(client.url), url)
+        );
+        if (viewing) return;
+        return show();
+      })
+      .catch(() => show())
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const url = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (new URL(client.url).pathname === url && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(url);
+      }
+    })
+  );
+});

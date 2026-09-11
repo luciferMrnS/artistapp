@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createMessage, getRecentMessages, findUserById, isUserRestricted } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
+import { sendCreedPushToEveryone } from "@/lib/push";
 
 export async function GET() {
   try {
@@ -41,6 +42,12 @@ export async function POST(req: NextRequest) {
       console.error("Failed to create message:", result.error);
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+
+    // Fire Creed unread pushes asynchronously — never block the sender.
+    Promise.resolve()
+      .then(() => sendCreedPushToEveryone({ exceptUserId: user.userId }))
+      .catch((err) => console.error("Creed push failed:", err));
+
     return NextResponse.json({ success: true, message: result }, { status: 201 });
   } catch (error) {
     console.error("Error creating message:", error);

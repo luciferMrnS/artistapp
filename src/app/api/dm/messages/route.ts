@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDirectMessages, sendDirectMessage, isUserRestricted } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
+import { sendUnreadPush } from "@/lib/push";
 
 /**
  * GET /api/dm/messages?conversation_id=...
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid body" }, { status: 400 });
     }
 
-    if (typeof body.recipientId !== "string" || !body.recipientId) {
+    const recipientId = body.recipientId;
+    if (typeof recipientId !== "string" || !recipientId) {
       return NextResponse.json(
         { error: "recipientId is required" },
         { status: 400 }
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const result = await sendDirectMessage(
       user.userId,
-      body.recipientId,
+      recipientId,
       content,
       mediaUrl
     );
@@ -80,6 +82,17 @@ export async function POST(req: NextRequest) {
         { status: result.error === "Direct messages are not set up yet" ? 503 : 400 }
       );
     }
+
+    // DM unread push to the recipient — asynchronous, never blocks the sender.
+    Promise.resolve()
+      .then(() =>
+        sendUnreadPush({
+          trigger: "dm",
+          url: "/messages",
+          userId: recipientId,
+        })
+      )
+      .catch((err) => console.error("DM push failed:", err));
 
     return NextResponse.json(
       {
