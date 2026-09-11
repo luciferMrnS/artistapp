@@ -77,6 +77,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${bangers.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-black text-white">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){"use strict";var set=function(m){try{document.title="CRASH: "+m;}catch(_){}};window.addEventListener("error",function(e){set((e.message||(e.error&&e.error.message)||"err"));});window.addEventListener("unhandledrejection",function(e){set("rej: "+((e.reason&&e.reason.message)||String(e.reason)));});})();`,
+          }}
+        />
         <AuthProvider>
           <PresenceHeartbeat />
           <PwaSetup />
