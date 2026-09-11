@@ -1,14 +1,7 @@
 "use client";
 
-import { Bangers } from "next/font/google";
 import { Megaphone, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const bangers = Bangers({
-  weight: "400",
-  subsets: ["latin"],
-  preload: false,
-});
 
 export interface AnnouncementData {
   id: string;
@@ -51,9 +44,9 @@ export function AnnouncementBanner({
             >
               <span
                 className={cn(
-                  bangers.className,
                   "bg-gradient-to-r from-yellow-300 via-red-400 to-primary bg-clip-text text-2xl uppercase tracking-wide text-transparent drop-shadow-[0_0_14px_rgba(29,155,240,0.95)]"
                 )}
+                style={{ fontFamily: "var(--font-bangers), Impact, sans-serif" }}
               >
                 {announcement.content}
               </span>
