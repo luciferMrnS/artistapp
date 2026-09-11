@@ -420,30 +420,6 @@ export function FanCommunity() {
     }
   };
 
-  const sendEmoji = async (emoji: string) => {
-    setShowEmoji(false);
-    if (isSending) return;
-    if (user?.restricted_at) {
-      window.alert("You have limited access, try again later");
-      return;
-    }
-    setIsSending(true);
-    try {
-      const res = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: emoji, messageType: "text" }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: `Failed to send emoji: ${res.status}` }));
-        throw new Error(errorData.error || `Failed to send emoji: ${res.status}`);
-      }
-      await fetchMessages();
-    } catch (e) { console.error("Failed to send emoji:", e); }
-    setIsSending(false);
-  };
-
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string) => {
       if (!user || user.restricted_at) return;
@@ -520,7 +496,9 @@ export function FanCommunity() {
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-border bg-zinc-900 p-3"
           >
-            <EmojiPicker onPick={sendEmoji} />
+            <EmojiPicker
+  onPick={(emoji) => setInput((prev) => prev + emoji)}
+/>
           </motion.div>
         )}
       </AnimatePresence>
