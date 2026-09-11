@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3 } from "lucide-react";
+import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3, Siren } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -16,6 +16,7 @@ const navItems = [
   { icon: Bell, label: "Notifications", href: "/notifications", artistOnly: false },
   { icon: Mail, label: "Messages", href: "/messages", artistOnly: false },
   { icon: User, label: "Profile", href: "/profile", artistOnly: false },
+  { icon: Siren, label: "Alert", href: "/alert", artistOnly: true },
   { icon: BarChart3, label: "Dashboard", href: "/dashboard", artistOnly: true },
 ];
 
