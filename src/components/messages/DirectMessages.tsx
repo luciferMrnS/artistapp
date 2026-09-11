@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Send, Plus, Loader2, MessageCircle, Search, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 interface DMChat {
   id: string;
@@ -54,6 +56,8 @@ function formatTime(timestamp: string): string {
 
 export function DirectMessages() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const targetUserId = searchParams?.get("user") ?? null;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [active, setActive] = useState<{
     conversationId: string | null;
@@ -99,6 +103,13 @@ export function DirectMessages() {
     }
   }, []);
 
+  // Opening the inbox clears the sidebar badge — mark everything read.
+  useEffect(() => {
+    fetch("/api/dm/read-all", { method: "POST" }).catch(() => {
+      // best-effort — per-conversation read marking covers the rest
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -106,22 +117,56 @@ export function DirectMessages() {
         const res = await fetch("/api/dm/conversations");
         if (!res.ok) throw new Error("fetch failed");
         const data = await res.json();
-        if (!cancelled) {
-          setConversations(data.conversations ?? []);
-          if (!activeConversationIdRef.current && data.conversations?.length) {
-            // open the most recent conversation automatically
-            const first = data.conversations[0] as ConversationSummary;
-            activeConversationIdRef.current = first.conversation_id;
-            setActive({
-              conversationId: first.conversation_id,
-              recipient: {
-                id: first.other_user.id,
-                username: first.other_user.username,
-                avatar: first.other_user.avatar,
-                role: first.other_user.role,
-              },
-            });
+        if (cancelled) return;
+        const convoList = (data.conversations ?? []) as ConversationSummary[];
+        setConversations(convoList);
+
+        // Prefer the DM deep-linked via /messages?user=<id>
+        const requestedId =
+          targetUserId && targetUserId !== user?.id ? targetUserId : null;
+
+        if (requestedId) {
+          const existing = convoList.find(
+            (c) => c.other_user.id === requestedId
+          );
+          if (existing) {
+            selectConversation(existing);
+            return;
           }
+          // No conversation yet — resolve the target's profile to start one.
+          try {
+            const ures = await fetch("/api/dm/users");
+            if (ures.ok) {
+              const udata = await ures.json();
+              const target = (udata.users ?? []).find(
+                (u: UserOption) => u.id === requestedId
+              );
+              if (target) {
+                setMessages([]);
+                setInput("");
+                setActive({ conversationId: null, recipient: target });
+                activeConversationIdRef.current = null;
+                return;
+              }
+            }
+          } catch {
+            // fall through to the default below
+          }
+        }
+
+        if (convoList.length) {
+          // open the most recent conversation automatically
+          const first = convoList[0] as ConversationSummary;
+          activeConversationIdRef.current = first.conversation_id;
+          setActive({
+            conversationId: first.conversation_id,
+            recipient: {
+              id: first.other_user.id,
+              username: first.other_user.username,
+              avatar: first.other_user.avatar,
+              role: first.other_user.role,
+            },
+          });
         }
       } catch {
         // best-effort
@@ -133,6 +178,7 @@ export function DirectMessages() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load messages for the active conversation + mark read

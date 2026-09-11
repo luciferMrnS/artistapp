@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Trophy, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 const COUNT_POLL_MS = 10_000;
 const TOP_POLL_MS = 60_000;
@@ -208,7 +209,11 @@ export function FanLeaderboard() {
                           <Avatar src={resolveAvatarUrl(fan.avatar)} name={fan.username} />
                           <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-zinc-900" />
                         </span>
-                        <span className="truncate text-sm text-white">{fan.username}</span>
+                        <UserDmLink
+                          userId={fan.id}
+                          username={fan.username}
+                          className="truncate text-sm text-white"
+                        />
                       </li>
                     ))}
                   </ul>
@@ -244,9 +249,11 @@ export function FanLeaderboard() {
                     <RankBadge rank={rank} />
                     <Avatar src={resolveAvatarUrl(fan.avatar)} name={fan.username} />
                     <div className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-white">
-                        {fan.username}
-                      </span>
+                      <UserDmLink
+                        userId={fan.id}
+                        username={fan.username}
+                        className="block truncate text-sm font-medium text-white"
+                      />
                       <span className="block truncate text-[11px] text-secondary">
                         {fan.likes} like{fan.likes === 1 ? "" : "s"} ·{" "}
                         {fan.comments} comment{fan.comments === 1 ? "" : "s"} ·{" "}

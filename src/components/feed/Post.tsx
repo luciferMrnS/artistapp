@@ -8,6 +8,7 @@ import { KebabMenu } from "@/components/ui/KebabMenu";
 import { Lightbox } from "@/components/ui/Lightbox";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 export interface PostAuthor {
   id: string;
@@ -81,7 +82,11 @@ export function Post({
           </div>
           <div>
             <div className="flex items-center gap-1">
-              <span className="font-bold hover:underline cursor-pointer">{author.username}</span>
+              <UserDmLink
+                userId={author.id}
+                username={author.username}
+                className="font-bold text-white"
+              />
               {author.role === "artist" && (
                 <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
                   Artist

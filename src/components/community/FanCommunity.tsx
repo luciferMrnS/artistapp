@@ -9,6 +9,7 @@ import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { Lightbox } from "@/components/ui/Lightbox";
 import { markCreedRead } from "@/lib/creed-unread";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 interface MessageReaction {
   emoji: string;
@@ -160,7 +161,9 @@ function MessageRow({
         )}
       >
         <p className={cn("text-[10px] font-semibold", isMine ? "text-white/80" : "text-primary")}>
-          {msg.username}
+          <UserDmLink userId={msg.user_id} username={msg.username} className={isMine ? "text-white/80" : "text-primary"}>
+            {msg.username}
+          </UserDmLink>
         </p>
 
         {repliedTo && (

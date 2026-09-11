@@ -2884,6 +2884,32 @@ export async function getUsersForDirectMessage(userId: string) {
   }
 }
 
+/**
+ * Mark every incoming DM as read — called once when the user opens their
+ * inbox so the sidebar badge clears.
+ */
+export async function markAllMessagesRead(
+  userId: string
+): Promise<{ success: boolean }> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("direct_messages")
+      .update({ read: true })
+      .eq("recipient_id", userId)
+      .eq("read", false);
+
+    if (error) {
+      if (isTableMissing(error)) return { success: true };
+      console.error("Error marking all DMs read:", error);
+      return { success: false };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to mark all DMs read:", err);
+    return { success: false };
+  }
+}
+
 // ─── Community / Messages ────────────────────────────
 // Fan community chat: text, emoji, GIFs, and image/meme
 // uploads. Real-time delivery via Supabase Realtime with

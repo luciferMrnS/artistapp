@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { NotificationWithActor } from "@/lib/db";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 function timeAgo(timestamp: string): string {
   const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -117,23 +118,25 @@ export function NotificationsFeed() {
             </div>
 
             <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-sm text-white">
+                {notification.actor && (
+                  <img
+                    src={resolveAvatarUrl(notification.actor.avatar)}
+                    alt={notification.actor.username}
+                    className="h-5 w-5 rounded-full object-cover"
+                  />
+                )}
+                <UserDmLink
+                  userId={notification.actor?.id ?? ""}
+                  username={notification.actor?.username ?? "Someone"}
+                  className="truncate font-semibold text-white"
+                />
+              </div>
               <Link
                 href={notification.post_id ? `/post/${notification.post_id}` : "#"}
-                className="block"
+                className="mt-1 block"
               >
-                <div className="flex items-center gap-2 text-sm text-white">
-                  {notification.actor && (
-                    <img
-                      src={resolveAvatarUrl(notification.actor.avatar)}
-                      alt={notification.actor.username}
-                      className="h-5 w-5 rounded-full object-cover"
-                    />
-                  )}
-                  <span className="truncate font-semibold">
-                    {notification.actor?.username ?? "Someone"}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-secondary">
+                <p className="text-sm text-secondary">
                   {notification.type === "like" && "liked your post"}
                   {notification.type === "comment" && "commented on your post"}
                   {notification.type === "follow" && "started following you"}

@@ -5,6 +5,7 @@ import { Send, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
+import { UserDmLink } from "@/components/dm/UserDmLink";
 
 interface CommentSectionProps {
   postId: string;
@@ -126,9 +127,11 @@ export function CommentSection({
                 </div>
                 <div className="flex-1 rounded-2xl bg-zinc-900 px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold">
-                      {comment.author.username}
-                    </span>
+                    <UserDmLink
+                      userId={comment.author.id}
+                      username={comment.author.username}
+                      className="text-xs font-semibold text-white"
+                    />
                     <span className="text-xs text-secondary">
                       {new Date(comment.created_at).toLocaleTimeString([], {
                         hour: "2-digit",

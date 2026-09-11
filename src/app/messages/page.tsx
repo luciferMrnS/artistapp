@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DirectMessages } from "@/components/messages/DirectMessages";
@@ -21,7 +22,15 @@ export default function MessagesPage() {
               </div>
             </header>
 
-            <DirectMessages />
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center p-10 text-secondary">
+                  Loading conversations…
+                </div>
+              }
+            >
+              <DirectMessages />
+            </Suspense>
           </main>
         </div>
       </div>
