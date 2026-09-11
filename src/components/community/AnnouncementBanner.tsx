@@ -33,7 +33,7 @@ export function AnnouncementBanner({
 }: AnnouncementBannerProps) {
   if (!announcement) return null;
 
-  const duration = Math.max(6, Math.min(14, announcement.content.length / 14 + 5));
+  const duration = Math.max(18, Math.min(40, announcement.content.length / 6 + 12));
 
   return (
     <div className="relative z-30 overflow-hidden border-b border-primary/40 bg-gradient-to-r from-primary/25 via-primary/10 to-transparent">
