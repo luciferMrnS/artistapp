@@ -62,8 +62,8 @@ export function Sidebar() {
             const lastRead = getCreedLastRead();
             const mineId = user.id;
             const unread = (creedData.messages ?? []).filter(
-              (m: { sender_id?: string; created_at?: string }) =>
-                m.sender_id !== mineId &&
+              (m: { user_id?: string; created_at?: string }) =>
+                m.user_id !== mineId &&
                 m.created_at &&
                 new Date(m.created_at).getTime() > lastRead
             ).length;
