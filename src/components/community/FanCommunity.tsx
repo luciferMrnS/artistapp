@@ -12,6 +12,7 @@ import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 import {
   AnnouncementBanner,
   type AnnouncementData,
@@ -145,14 +146,23 @@ function MessageRow({
       }}
       {...longPress}
     >
-      <div
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white",
-          isMine ? "bg-primary" : "bg-gradient-to-br from-pink-500 to-purple-500"
-        )}
-      >
-        {msg.username.slice(0, 2).toUpperCase()}
-      </div>
+      {msg.avatar ? (
+        <img
+          src={resolveAvatarUrl(msg.avatar)}
+          alt={msg.username}
+          className="h-8 w-8 shrink-0 rounded-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white",
+            isMine ? "bg-primary" : "bg-gradient-to-br from-pink-500 to-purple-500"
+          )}
+        >
+          {msg.username.slice(0, 2).toUpperCase()}
+        </div>
+      )}
 
       <div
         className={cn(
