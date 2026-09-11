@@ -76,3 +76,32 @@ has none and pauses the project after 7 days of inactivity).
 
 A `Dockerfile` (multi-stage, non-root, standalone output) is included for
 self-hosting; `vercel.json` is included for Vercel as an alternative.
+
+## Keep the app awake (Render free tier)
+
+Render free web services **spin down after ~15 min of inactivity**, and any
+request wakes the instance cold (slow first load). `src/app/api/health/route.ts`
+exposes a lightweight `GET /api/health` → `{"status":"ok"}` endpoint (no DB
+calls, milliseconds) used by every keep-alive below. Keep pings under 15 min:
+10-minute intervals work.
+
+**Primary (reliable): UptimeRobot** — pings from its own servers, independent
+of GitHub. This is what actually keeps the app up:
+
+1. Sign up at https://uptimerobot.com (free).
+2. **+ Add New Monitor**:
+   - Monitor Type: `HTTP(s)`
+   - Friendly Name: `kendrickdavid`
+   - URL (or IP): `https://kendrickdavid.onrender.com/api/health`
+   - Monitoring Interval: `10 minutes`
+   - (Optional) Keyword Type: `Exists` → Keyword Value: `ok`
+3. Create and activate the monitor.
+
+**Backup 1: GitHub Actions cron** (`.github/workflows/keep-alive.yml`) pings
+`/api/health` every 10 min. Useful but **unreliable** — GitHub throttles
+scheduled jobs on low-activity repos, so it can fire hours apart. Do not rely
+on it as the primary keep-alive.
+
+**Backup 2: browser self-ping** (`src/components/SelfKeepAlive.tsx`) fetches
+`/api/health` every 10 min from any open tab, even hidden ones. Only helps while
+someone has the site open.
