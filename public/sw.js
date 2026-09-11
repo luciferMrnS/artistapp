@@ -145,3 +145,16 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+// The app posts this when the user is all caught up — dismiss any active
+// unread notifications so Android's automatic icon dot disappears too.
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "clear-unread") {
+    event.waitUntil(
+      self.registration
+        .getNotifications({ tag: PUSH_TAG })
+        .then((notifications) => notifications.forEach((n) => n.close()))
+    );
+  }
+});
