@@ -59,7 +59,7 @@ export async function sendUnreadPush({ trigger, url, userId }: SendOptions) {
       tag: PUSH_TAG,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      data: { url },
+      data: { url, badgeCount: total },
       timestamp: Date.now(),
     });
 

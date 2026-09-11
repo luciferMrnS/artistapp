@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { getCreedLastRead } from "@/lib/creed-unread";
+import { setAppBadge } from "@/lib/app-badge";
 
 const navItems = [
   { icon: Home, label: "Home", href: "/", artistOnly: false },
@@ -83,6 +84,12 @@ export function Sidebar() {
       clearInterval(interval);
     };
   }, [user]);
+
+  // Mirror the combined unread total onto the installed app's icon badge
+  // (Android + desktop; iOS ignores it).
+  useEffect(() => {
+    setAppBadge(unreadCount + dmUnreadCount + creedUnreadCount);
+  }, [unreadCount, dmUnreadCount, creedUnreadCount]);
 
   const handleLogout = async () => {
     await logout();

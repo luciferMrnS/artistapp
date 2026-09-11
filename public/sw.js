@@ -91,6 +91,7 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Kendrick David";
   const body = data.body || "You have new messages";
   const url = (data.data && data.data.url) || "/";
+  const badgeCount = (data.data && parseInt(data.data.badgeCount || "0", 10)) || 0;
 
   const show = () =>
     self.registration.showNotification(title, {
@@ -116,6 +117,13 @@ self.addEventListener("push", (event) => {
         return show();
       })
       .catch(() => show())
+      .then(() => {
+        // Red count bubble on the home-screen icon (Android/desktop only).
+        if ("setAppBadge" in self.navigator) {
+          if (badgeCount > 0) self.navigator.setAppBadge(badgeCount);
+          else self.navigator.clearAppBadge();
+        }
+      })
   );
 });
 
