@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   Upload,
   Link as LinkIcon,
+  Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -12,6 +13,7 @@ import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { useFeed, type FeedPostData } from "@/components/feed/FeedContext";
+import { EmojiPicker } from "@/components/ui/EmojiPicker";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB — must match the API
 
@@ -25,6 +27,7 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [showImageInput, setShowImageInput] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [photoMode, setPhotoMode] = useState<"upload" | "link">("upload");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -120,6 +123,7 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
 
       setContent("");
       clearImage();
+      setShowEmoji(false);
 
       const created = data?.post as FeedPostData | undefined;
       if (created) {
@@ -245,24 +249,42 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
                 )}
               </div>
             )}
+            {showEmoji && (
+              <div className="mt-3 rounded-xl border border-border bg-zinc-900 p-2">
+                <EmojiPicker onPick={(emoji) => setContent((prev) => prev + emoji)} />
+              </div>
+            )}
             <div className="mt-3 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  if (showImageInput && imageUrl.trim() === "") {
-                    setShowImageInput(false);
-                  } else {
-                    setShowImageInput(true);
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-1 text-xs font-medium transition-colors",
-                  showImageInput ? "text-primary" : "text-secondary hover:text-primary"
-                )}
-              >
-                <ImageIcon className="w-4 h-4" />
-                {showImageInput ? "Hide photo option" : "Add photo"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEmoji((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1 text-xs font-medium transition-colors",
+                    showEmoji ? "text-primary" : "text-secondary hover:text-primary"
+                  )}
+                >
+                  <Smile className="h-4 w-4" />
+                  Emoji
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showImageInput && imageUrl.trim() === "") {
+                      setShowImageInput(false);
+                    } else {
+                      setShowImageInput(true);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 text-xs font-medium transition-colors",
+                    showImageInput ? "text-primary" : "text-secondary hover:text-primary"
+                  )}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  {showImageInput ? "Hide photo option" : "Add photo"}
+                </button>
+              </div>
               <button
                 type="submit"
                 disabled={

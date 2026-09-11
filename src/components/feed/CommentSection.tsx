@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { UserDmLink } from "@/components/dm/UserDmLink";
+import { EmojiPicker } from "@/components/ui/EmojiPicker";
 
 interface CommentSectionProps {
   postId: string;
@@ -37,6 +38,7 @@ export function CommentSection({
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentCount, setCommentCount] = useState(initialComments);
   const [inputValue, setInputValue] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
 
@@ -88,6 +90,7 @@ export function CommentSection({
         setCommentCount(newCount);
         onCommentCountChange(newCount);
         setInputValue("");
+        setShowEmoji(false);
       }
     } catch (error) {
       console.error("Failed to submit comment:", error);
@@ -153,19 +156,44 @@ export function CommentSection({
                 className="h-8 w-8 rounded-full"
               />
               <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Comment as a fan…"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !isSubmitting) {
-                      submitComment();
-                    }
-                  }}
-                  disabled={isSubmitting}
-                  className="w-full rounded-full bg-zinc-900 border border-border px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
-                />
+                <div className="flex items-center gap-2">
+                  {showEmoji && (
+                    <div className="relative">
+                      <div className="absolute bottom-full left-0 z-10 mb-2 w-[320px] rounded-xl border border-border bg-zinc-900 p-2 shadow-xl">
+                        <EmojiPicker
+                          onPick={(emoji) =>
+                            setInputValue((prev) => prev + emoji)
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowEmoji((v) => !v)}
+                    className={cn(
+                      "shrink-0 rounded-full p-2 transition-colors",
+                      showEmoji
+                        ? "bg-primary/10 text-primary"
+                        : "text-secondary hover:bg-white/10"
+                    )}
+                  >
+                    <Smile className="h-5 w-5" />
+                  </button>
+                  <input
+                    type="text"
+                    placeholder="Comment as a fan…"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isSubmitting) {
+                        submitComment();
+                      }
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full rounded-full bg-zinc-900 border border-border px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
               </div>
               <button
                 onClick={submitComment}

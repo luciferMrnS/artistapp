@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Loader2, MessageCircle, Search, EyeOff } from "lucide-react";
+import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { UserDmLink } from "@/components/dm/UserDmLink";
+import { EmojiPicker } from "@/components/ui/EmojiPicker";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface DMChat {
   id: string;
@@ -65,6 +67,7 @@ export function DirectMessages() {
   } | null>(null);
   const [messages, setMessages] = useState<DMChat[]>([]);
   const [input, setInput] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showNewPicker, setShowNewPicker] = useState(false);
@@ -224,6 +227,7 @@ export function DirectMessages() {
 
   const selectConversation = (convo: ConversationSummary) => {
     setShowNewPicker(false);
+    setShowEmoji(false);
     setActive({
       conversationId: convo.conversation_id,
       recipient: {
@@ -303,6 +307,7 @@ export function DirectMessages() {
         activeConversationIdRef.current = data.conversationId as string;
       }
       setInput("");
+      setShowEmoji(false);
       fetchConversations();
     } catch {
       setConvoError("Could not send message");
@@ -517,6 +522,22 @@ export function DirectMessages() {
                   {convoError && (
                     <p className="mb-2 text-xs text-red-500">{convoError}</p>
                   )}
+                  <AnimatePresence>
+                    {showEmoji && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="border-b border-border bg-zinc-900 p-3"
+                      >
+                        <EmojiPicker
+                          onPick={(emoji) =>
+                            setInput((prev) => prev + emoji)
+                          }
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <form
                     className="flex items-center gap-2"
                     onSubmit={(e) => {
@@ -524,6 +545,18 @@ export function DirectMessages() {
                       sendMessage();
                     }}
                   >
+                    <button
+                      type="button"
+                      onClick={() => setShowEmoji((v) => !v)}
+                      className={cn(
+                        "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
+                        showEmoji
+                          ? "bg-primary text-white"
+                          : "text-secondary hover:bg-white/10"
+                      )}
+                    >
+                      <Smile className="h-5 w-5" />
+                    </button>
                     <input
                       value={input}
                       onChange={(e) => {

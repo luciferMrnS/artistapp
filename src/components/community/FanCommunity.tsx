@@ -10,6 +10,7 @@ import { UploadProgress } from "@/components/ui/UploadProgress";
 import { Lightbox } from "@/components/ui/Lightbox";
 import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
+import { EmojiPicker } from "@/components/ui/EmojiPicker";
 
 interface MessageReaction {
   emoji: string;
@@ -29,12 +30,6 @@ interface Message {
   reactions?: MessageReaction[];
   created_at: string;
 }
-
-const EMOJI_LIST = [
-  "\u{1F602}", "\u2764\uFE0F", "\u{1F525}", "\u{1F4AF}", "\u{1F62D}", "\u{1F44F}", "\u{1F389}", "\u{1F60E}", "\u{1F929}", "\u{1F4AA}",
-  "\u{1F64C}", "\u{1F440}", "\u{1F923}", "\u{1F60D}", "\u{1F973}", "\u{1F624}", "\u{1F92F}", "\u{1F480}", "\u{1F451}", "\u2728",
-  "\u{1F64F}", "\u{1F494}", "\u{1F608}", "\u{1F91D}", "\u{1F3B5}", "\u{1F3A4}", "\u{1F3A7}", "\u{1F3B6}", "\u{1F4F8}", "\u{1FAE1}",
-];
 
 const QUICK_REACTS = [
   "\u2764\uFE0F",
@@ -525,14 +520,7 @@ export function FanCommunity() {
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-border bg-zinc-900 p-3"
           >
-            <div className="grid grid-cols-10 gap-1">
-              {EMOJI_LIST.map((emoji) => (
-                <button key={emoji} onClick={() => sendEmoji(emoji)}
-                  className="rounded-lg p-2 text-xl transition hover:bg-white/10">
-                  {emoji}
-                </button>
-              ))}
-            </div>
+            <EmojiPicker onPick={sendEmoji} />
           </motion.div>
         )}
       </AnimatePresence>
