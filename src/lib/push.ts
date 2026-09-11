@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import {
   getCombinedUnreadCount,
+  getAllPushSubscriptions,
   getPushSubscriptionsForUser,
   getPushSubscriptionUserIds,
   removePushSubscription,
@@ -19,6 +20,37 @@ if (vapidConfigured) {
 }
 
 export const PUSH_TAG = "kendrick-unread";
+export const HARD_ALERT_TAG = "kendrick-alert";
+
+// Hard alerts carry the full message text in the push body, which is
+// VAPID-encrypted and capped at ~4KB by the platform. Keep messages short
+// enough to fit even with emoji/multi-byte content in the payload.
+export const MAX_ALERT_LENGTH = 1200;
+
+/** Prune dead subscriptions (404/410) reported by the push provider. */
+function cleanupDeadSubscriptions<T extends { endpoint: string }>(
+  subscriptions: T[],
+  results: PromiseSettledResult<unknown>[]
+): { sent: number; failed: number } {
+  let sent = 0;
+  let failed = 0;
+  results.forEach((result, i) => {
+    const sub = subscriptions[i];
+    if (!sub) return;
+    if (result.status === "fulfilled") {
+      sent += 1;
+    } else {
+      failed += 1;
+      const err = result.reason as { statusCode?: number };
+      if (err?.statusCode === 404 || err?.statusCode === 410) {
+        removePushSubscription(sub.endpoint);
+      } else {
+        console.error("Push send failed:", err);
+      }
+    }
+  });
+  return { sent, failed };
+}
 
 interface SendOptions {
   /** Which surface triggered this push: "creed" | "dm" */
@@ -75,19 +107,7 @@ export async function sendUnreadPush({ trigger, url, userId }: SendOptions) {
       )
     );
 
-    // Drop subscriptions the provider no longer recognizes (404/410).
-    results.forEach((result, i) => {
-      const sub = subscriptions[i];
-      if (!sub) return;
-      if (result.status !== "fulfilled") {
-        const err = result.reason as { statusCode?: number };
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          removePushSubscription(sub.endpoint);
-        } else {
-          console.error("Push send failed:", err);
-        }
-      }
-    });
+    cleanupDeadSubscriptions(subscriptions, results);
   } catch (err) {
     console.error("Failed to send unread push:", err);
   }
@@ -115,4 +135,68 @@ export async function sendCreedPushToEveryone({
         sendUnreadPush({ trigger: "creed", url: "/fan-club", userId: id })
       )
   );
+}
+
+/**
+ * Send a hard alert to every installed device.
+ *
+ * Unlike the unread-count banners, the full message text is delivered in the
+ * notification body so fans see the whole update without opening the app.
+ * Uses its own tag so it never gets clobbered by (or clobbers) the unread
+ * banner, and the service worker keeps it on screen (`requireInteraction`)
+ * with a vibration on phones.
+ */
+export async function sendHardAlertToEveryone({
+  title,
+  message,
+  url = "/",
+  exceptUserId,
+}: {
+  title: string;
+  message: string;
+  url?: string;
+  exceptUserId?: string;
+}): Promise<{ devices: number; sent: number; failed: number }> {
+  if (!vapidConfigured) {
+    console.warn("VAPID keys not configured — skipping hard alert");
+    return { devices: 0, sent: 0, failed: 0 };
+  }
+
+  const subscriptions = await getAllPushSubscriptions();
+  if (subscriptions.length === 0) {
+    return { devices: 0, sent: 0, failed: 0 };
+  }
+
+  const recipients = exceptUserId
+    ? subscriptions.filter((sub) => sub.user_id !== exceptUserId)
+    : subscriptions;
+  if (recipients.length === 0) {
+    return { devices: recipients.length, sent: 0, failed: 0 };
+  }
+
+  const payload = JSON.stringify({
+    title,
+    body: message,
+    tag: HARD_ALERT_TAG,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url, badgeCount: 0, type: "hard-alert" },
+    timestamp: Date.now(),
+  });
+
+  const results = await Promise.allSettled(
+    recipients.map((sub) =>
+      webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth },
+        },
+        payload,
+        { TTL: 86_400, urgency: "high" }
+      )
+    )
+  );
+
+  const { sent, failed } = cleanupDeadSubscriptions(recipients, results);
+  return { devices: recipients.length, sent, failed };
 }

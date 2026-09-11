@@ -2,7 +2,7 @@
  * offline fallback. Only same-origin GET asset/navigation requests are
  * cached — API/auth requests always go to the network. */
 
-const CACHE_NAME = "kendrick-david-v1";
+const CACHE_NAME = "kendrick-david-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -64,10 +64,12 @@ self.addEventListener("fetch", (event) => {
 });
 
 const PUSH_TAG = "kendrick-unread";
+const HARD_ALERT_TAG = "kendrick-alert";
 
 /**
  * Is the user actively looking at the surface this push is about? If so,
  * suppress the banner so chatting isn't spammed by your own view.
+ * Hard alerts never suppress — they take over the screen on purpose.
  */
 function isViewingRelevantPage(url, payloadUrl) {
   if (!payloadUrl) return false;
@@ -84,7 +86,7 @@ self.addEventListener("push", (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
-  } catch (e) {
+  } catch {
     /* fall through to the default payload */
   }
 
@@ -92,32 +94,47 @@ self.addEventListener("push", (event) => {
   const body = data.body || "You have new messages";
   const url = (data.data && data.data.url) || "/";
   const badgeCount = (data.data && parseInt(data.data.badgeCount || "0", 10)) || 0;
+  const isAlert = data.tag === HARD_ALERT_TAG;
+  const tag = data.tag || PUSH_TAG;
 
-  const show = () =>
-    self.registration.showNotification(title, {
-      body,
-      tag: PUSH_TAG,
-      icon: data.icon || "/icon-192.png",
-      badge: data.badge || "/icon-192.png",
-      data: { url },
-    });
+  const notificationOptions = {
+    body,
+    tag,
+    icon: data.icon || "/icon-192.png",
+    badge: data.badge || "/icon-192.png",
+    data: { url },
+  };
 
-  // A focused client already on the relevant page? Skip the banner.
+  if (isAlert) {
+    // Full-content hard alert: stay on screen until dismissed (don't auto
+    // collapse), buzz on phones, and always show even if the app is open.
+    notificationOptions.requireInteraction = true;
+    notificationOptions.vibrate = [200, 100, 200];
+  }
+
+  const show = () => self.registration.showNotification(title, notificationOptions);
+
+  // A focused client already on the relevant page? Skip the banner — unless
+  // this is a hard alert, which is shown unconditionally.
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
-        const viewing = clients.some(
-          (client) =>
-            client.focused &&
-            (client.visibilityState === "visible" || client.visibilityState === "prerender") &&
-            isViewingRelevantPage(new URL(client.url), url)
-        );
+        const viewing =
+          !isAlert &&
+          clients.some(
+            (client) =>
+              client.focused &&
+              (client.visibilityState === "visible" || client.visibilityState === "prerender") &&
+              isViewingRelevantPage(new URL(client.url), url)
+          );
         if (viewing) return;
         return show();
       })
       .catch(() => show())
       .then(() => {
+        // Hard alerts don't touch the unread badge.
+        if (isAlert) return;
         // Red count bubble on the home-screen icon (Android/desktop only).
         if ("setAppBadge" in self.navigator) {
           if (badgeCount > 0) self.navigator.setAppBadge(badgeCount);

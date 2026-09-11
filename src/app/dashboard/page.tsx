@@ -15,6 +15,7 @@ import {
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { NewsletterForm } from "@/components/dashboard/NewsletterForm";
+import { HardAlertForm } from "@/components/dashboard/HardAlertForm";
 import { SubscribersSection } from "@/components/dashboard/SubscribersSection";
 import { verifyToken } from "@/lib/server-auth";
 import { getArtistStats, getRegisteredFans, type ArtistStats, type RegisteredFanRow } from "@/lib/db";
@@ -101,6 +102,9 @@ function DashboardContent({
           </header>
 
           <div className="mx-auto max-w-[680px] space-y-6 p-6 pb-16">
+            {/* Hard alert — highest priority, at the top */}
+            <HardAlertForm />
+
             {/* Overview cards */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <StatCard

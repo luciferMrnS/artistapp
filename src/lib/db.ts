@@ -3469,6 +3469,24 @@ export async function getPushSubscriptionUserIds(): Promise<string[]> {
   }
 }
 
+/** Every device subscribed across all users (used for broadcast alerts). */
+export async function getAllPushSubscriptions(): Promise<PushSubscriptionRow[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("id, user_id, endpoint, p256dh, auth");
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching all push subscriptions:", error);
+      return [];
+    }
+    return (data ?? []) as PushSubscriptionRow[];
+  } catch (err) {
+    console.error("Failed to fetch all push subscriptions:", err);
+    return [];
+  }
+}
+
 /**
  * Record that the user just opened the Creed chat. Resets the server-side
  * "unread creed" baseline used to build the push-notification totals.
