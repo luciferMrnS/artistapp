@@ -84,6 +84,11 @@ export default function SignupPage() {
       if (data.requiresVerification) {
         // Email confirmation required — show the "check your inbox" state
         setVerificationSent(true);
+        if (data.emailSendFailed) {
+          setResendMessage(
+            "We had trouble sending the confirmation email just now. Wait a minute, tap 'Resend verification email', and check your spam folder."
+          );
+        }
         return;
       }
 

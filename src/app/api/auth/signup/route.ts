@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findUserByEmail, getUserPublicData, createUnverifiedUser } from "@/lib/db";
+import {
+  findUserByEmail,
+  getUserPublicData,
+  createUnverifiedUser,
+  findAuthUserByEmail,
+} from "@/lib/db";
 import { isValidEmail } from "@/lib/email-validation";
 import { createAuthCookieClient, getAppUrl } from "@/lib/supabase-auth-client";
 import type { UserRole } from "@/lib/db";
@@ -109,11 +114,50 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      if (isRateLimitError(error.message)) {
+      const errorMessage = error.message || "";
+
+      // When the confirmation-email send fails (custom SMTP hiccup), Supabase
+      // has STILL created the auth identity. Adopt it into the app profile so
+      // login + resend work instead of leaving a dead-end orphaned account.
+      // Same for a previous failed signup that left an identity behind.
+      const emailSendFailed = /error sending confirmation message/i.test(errorMessage);
+      const orphanAdoption = emailSendFailed || /already registered/i.test(errorMessage);
+      if (orphanAdoption) {
+        const authUser = await findAuthUserByEmail(email);
+        if (authUser) {
+          const profile = await createUnverifiedUser({
+            email,
+            username,
+            role: userRole,
+            supabaseAuthId: authUser.id,
+          });
+          if ("error" in profile) {
+            console.error("Signup orphan adoption failed:", profile.error);
+          } else {
+            console.error(
+              emailSendFailed
+                ? "Confirmation email send failed — account created, user will use resend:"
+                : "Adopted orphaned auth identity:",
+              errorMessage
+            );
+            return NextResponse.json(
+              {
+                success: true,
+                requiresVerification: true,
+                emailSendFailed,
+                user: getUserPublicData(profile),
+              },
+              { status: 201 }
+            );
+          }
+        }
+      }
+
+      if (isRateLimitError(errorMessage)) {
         // Mark the send as attempted so the user waits out the cooldown
         // instead of re-hitting the raw Supabase error.
         sendAttempts.set(key, now);
-        console.error("Supabase signup rate-limited:", error.message);
+        console.error("Supabase signup rate-limited:", errorMessage);
         return NextResponse.json(
           {
             error: "Please wait a few seconds, then try again.",
@@ -123,8 +167,8 @@ export async function POST(req: NextRequest) {
           { status: 429 }
         );
       }
-      console.error("Supabase signup error:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("Supabase signup error:", errorMessage);
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     sendAttempts.set(key, now);

@@ -291,6 +291,34 @@ export async function createUnverifiedUser({
 }
 
 /**
+ * Find a Supabase Auth identity by exact email (case-insensitive).
+ * Used to adopt orphaned auth users (e.g. a signup whose confirmation-email
+ * send failed after Supabase already created the identity).
+ */
+export async function findAuthUserByEmail(
+  email: string
+): Promise<import("@supabase/supabase-js").User | null> {
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (error) {
+      console.error("Error listing auth users:", error.message);
+      return null;
+    }
+    return (
+      data.users.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase()
+      ) ?? null
+    );
+  } catch (err) {
+    console.error("findAuthUserByEmail error:", err);
+    return null;
+  }
+}
+
+/**
  * Mark a user's email as verified (after Supabase confirmation) and link
  * the Supabase Auth account. Returns the updated row.
  */
@@ -2287,7 +2315,12 @@ export async function touchPresence(userId: string): Promise<boolean> {
         .upsert({ user_id: userId, last_seen_at: now }, { onConflict: "user_id" });
       if (retryError) {
         if (isTableMissing(retryError)) return false;
-        console.error("Error touching presence:", error);
+        // FK violation (23503): the session cookie outlives the users row
+        // (e.g. a fan deleted from the dashboard while still logged in). This
+        // is expected — the stale heartbeat just must not be counted.
+        if (retryError.code !== "23503") {
+          console.error("Error touching presence:", error);
+        }
         return false;
       }
     }
