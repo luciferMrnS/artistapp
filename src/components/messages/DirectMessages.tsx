@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile } from "lucide-react";
+import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -329,9 +329,14 @@ export function DirectMessages() {
   // ── Render ───────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-73px)]">
-      {/* Conversations list */}
-      <aside className="flex w-full max-w-[300px] flex-col border-r border-border bg-zinc-900/30">
+    <div className="flex h-[calc(100vh-73px)] supports-[height:100dvh]:h-[calc(100dvh-73px)]">
+      {/* Conversations list — full-width on phones until a chat is opened */}
+      <aside
+        className={cn(
+          "w-full max-w-[300px] flex-col border-r border-border bg-zinc-900/30",
+          !active || showNewPicker ? "flex" : "hidden lg:flex"
+        )}
+      >
         <div className="flex items-center justify-between border-b border-border p-3">
           <h2 className="text-sm font-semibold">Inbox</h2>
           <button
@@ -444,8 +449,13 @@ export function DirectMessages() {
         )}
       </aside>
 
-      {/* Chat window */}
-      <section className="flex min-w-0 flex-1 flex-col">
+      {/* Chat window — full-width on phones while a chat is open */}
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          !active || showNewPicker ? "hidden lg:flex" : "flex"
+        )}
+      >
         {!active ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-secondary">
             <MessageCircle className="h-10 w-10" />
@@ -454,6 +464,14 @@ export function DirectMessages() {
         ) : (
           <>
             <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setActive(null)}
+                aria-label="Back to inbox"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-secondary transition hover:bg-white/10 lg:hidden"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
               <img
                 src={resolveAvatarUrl(active.recipient.avatar)}
                 alt={active.recipient.username}
