@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Smile, Image as ImageIcon, Loader2, MessageCircle, Reply, X } from "lucide-react";
+import { Send, Smile, Image as ImageIcon, Loader2, MessageCircle, Reply, X, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
@@ -12,6 +12,10 @@ import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
+import {
+  AnnouncementBanner,
+  type AnnouncementData,
+} from "@/components/community/AnnouncementBanner";
 
 interface MessageReaction {
   emoji: string;
@@ -262,6 +266,13 @@ export function FanCommunity() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [reactFor, setReactFor] = useState<Message | null>(null);
 
+  const [announcement, setAnnouncement] = useState<AnnouncementData | null>(null);
+  const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState<string | null>(null);
+  const [showAnnounce, setShowAnnounce] = useState(false);
+  const [announceText, setAnnounceText] = useState("");
+  const [announceSending, setAnnounceSending] = useState(false);
+  const [announceError, setAnnounceError] = useState("");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiToggleRef = useRef<HTMLButtonElement>(null);
@@ -469,10 +480,94 @@ export function FanCommunity() {
     );
   }
 
+  const isArtist = user.role === "artist";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchAnnouncement = async () => {
+      try {
+        const res = await fetch("/api/announcements", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const latest = (data.announcements ?? [])[0] ?? null;
+        setAnnouncement(latest ? (latest as AnnouncementData) : null);
+      } catch (err) {
+        console.error("Failed to fetch announcements:", err);
+      }
+    };
+
+    fetchAnnouncement();
+    const interval = setInterval(fetchAnnouncement, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const visibleAnnouncement =
+    announcement && announcement.id !== dismissedAnnouncementId ? announcement : null;
+
+  const postAnnouncement = async () => {
+    const content = announceText.trim();
+    if (!content) return;
+    setAnnounceSending(true);
+    setAnnounceError("");
+    try {
+      const res = await fetch("/api/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAnnounceError(data?.error ?? "Failed to post announcement");
+        return;
+      }
+      setAnnouncement(data.announcement as AnnouncementData);
+      setDismissedAnnouncementId(null);
+      setAnnounceText("");
+      setShowAnnounce(false);
+    } catch (err) {
+      setAnnounceError(err instanceof Error ? err.message : "Failed to post announcement");
+    } finally {
+      setAnnounceSending(false);
+    }
+  };
+
+  const deleteCurrentAnnouncement = async () => {
+    if (!announcement) return;
+    setAnnounceSending(true);
+    setAnnounceError("");
+    try {
+      const res = await fetch(`/api/announcements/${announcement.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setAnnounceError(data?.error ?? "Failed to delete announcement");
+        return;
+      }
+      setAnnouncement(null);
+      setDismissedAnnouncementId(null);
+    } catch (err) {
+      setAnnounceError(err instanceof Error ? err.message : "Failed to delete announcement");
+    } finally {
+      setAnnounceSending(false);
+    }
+  };
+
   const reactionsDisabled = !!user.restricted_at;
 
   return (
     <div className="flex h-full flex-col">
+      <AnnouncementBanner
+        announcement={visibleAnnouncement}
+        onDismiss={() => visibleAnnouncement && setDismissedAnnouncementId(visibleAnnouncement.id)}
+      />
       <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef} onScroll={handleScroll}>
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
@@ -611,6 +706,19 @@ export function FanCommunity() {
                 <ImageIcon className="h-5 w-5" />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              {isArtist && (
+                <button
+                  onClick={() => {
+                    setAnnounceError("");
+                    setShowAnnounce(true);
+                  }}
+                  className="relative rounded-full p-2 text-secondary transition hover:bg-white/10 hover:text-primary"
+                  title="Make an announcement"
+                  aria-label="Make an announcement"
+                >
+                  <Megaphone className="h-5 w-5" />
+                </button>
+              )}
               <input
                 type="text"
                 value={input}
@@ -630,6 +738,88 @@ export function FanCommunity() {
       {preview && (
         <Lightbox src={preview} onClose={() => setPreview(null)} />
       )}
+
+      <AnimatePresence>
+        {showAnnounce && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            onClick={() => setShowAnnounce(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl border border-border bg-zinc-900 p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
+                  <Megaphone className="h-4 w-4" /> Make an announcement
+                </h3>
+                <button
+                  onClick={() => setShowAnnounce(false)}
+                  className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                  aria-label="Close announcement composer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mb-4 text-xs text-secondary">
+                This plays as a sliding banner at the top of Creed that every fan sees.
+              </p>
+
+              <textarea
+                value={announceText}
+                onChange={(e) => setAnnounceText(e.target.value)}
+                rows={3}
+                maxLength={200}
+                placeholder="e.g. New single DROPS FRIDAY ⚡ don't miss it!"
+                className="w-full resize-none rounded-xl border border-border bg-white/5 p-3 text-sm text-white placeholder-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <div className="mt-1 text-right text-xs text-secondary">
+                {announceText.length}/200
+              </div>
+
+              {announceError && (
+                <p className="mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                  {announceError}
+                </p>
+              )}
+
+              {announcement && (
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-white/5 p-3">
+                  <p className="min-w-0 flex-1 truncate text-xs text-secondary">
+                    Currently showing: <span className="text-white">{announcement.content}</span>
+                  </p>
+                  <button
+                    onClick={deleteCurrentAnnouncement}
+                    disabled={announceSending}
+                    className="shrink-0 rounded-lg border border-red-500/40 px-2 py-1 text-xs font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={postAnnouncement}
+                disabled={!announceText.trim() || announceSending}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-white transition hover:opacity-80 disabled:opacity-50"
+              >
+                {announceSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Megaphone className="h-4 w-4" />
+                )}
+                Post announcement
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

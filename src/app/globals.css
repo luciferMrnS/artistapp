@@ -92,3 +92,30 @@ a {
 .animate-float-bounce {
   animation: float-bounce 2.4s ease-in-out infinite;
 }
+
+@keyframes announcement-slide {
+  0% {
+    transform: translateX(calc(100vw + 60px));
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.announcement-slide {
+  animation-name: announcement-slide;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}

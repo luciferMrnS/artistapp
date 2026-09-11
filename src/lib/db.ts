@@ -191,6 +191,97 @@ async function incrementPostCounter(
 
 // ─── User Functions ─────────────────────────────────
 
+// ─── Announcement Functions ─────────────────────────────
+
+export interface Announcement {
+  id: string;
+  content: string;
+  created_at: string;
+  expires_at: string | null;
+}
+
+/**
+ * Get the most recent active announcements (not expired), newest first.
+ */
+export async function getActiveAnnouncements(
+  limit = 1
+): Promise<Announcement[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("announcements")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching announcements:", error);
+      return [];
+    }
+
+    const now = new Date().toISOString();
+    return (data as Announcement[])
+      .filter((a) => !a.expires_at || a.expires_at > now)
+      .slice(0, limit);
+  } catch (err) {
+    console.error("Error fetching announcements:", err);
+    return [];
+  }
+}
+
+/**
+ * Create a new artist announcement.
+ */
+export async function createAnnouncement(
+  content: string
+): Promise<Announcement | { error: string }> {
+  const id = `ann_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("announcements")
+      .insert([{ id, content }])
+      .select()
+      .single();
+
+    if (error) {
+      if (isTableMissing(error)) {
+        return { error: "Announcements aren't enabled yet (run migration_announcements.sql)." };
+      }
+      console.error("Error creating announcement:", error);
+      return { error: error.message || "Failed to create announcement" };
+    }
+
+    return data as Announcement;
+  } catch (err) {
+    console.error("Error creating announcement:", err);
+    return { error: "Failed to create announcement" };
+  }
+}
+
+/**
+ * Delete an announcement (artist only).
+ */
+export async function deleteAnnouncement(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("announcements")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting announcement:", error);
+      return { success: false, error: error.message || "Failed to delete announcement" };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("Error deleting announcement:", err);
+    return { success: false, error: "Failed to delete announcement" };
+  }
+}
+
 /**
  * Find user by email - queries Supabase
  */
