@@ -321,9 +321,9 @@ export function FanCommunity() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // While the user is pinned near the bottom, new polls keep them there;
-  // once they scroll up to read older messages, polls stop stealing focus.
-  const autoScrollRef = useRef(true);
+  // Scroll to the newest message exactly once when the page is first opened —
+  // new incoming messages never yank the user's scroll position afterwards.
+  const scrolledOnOpenRef = useRef(false);
 
   const messagesById = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
@@ -335,15 +335,7 @@ export function FanCommunity() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    autoScrollRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-  }, []);
-
   const forceScrollToBottom = useCallback(() => {
-    autoScrollRef.current = true;
     scrollToBottom();
   }, [scrollToBottom]);
 
@@ -393,7 +385,10 @@ export function FanCommunity() {
   }, []);
 
   useEffect(() => {
-    if (autoScrollRef.current) scrollToBottom();
+    if (scrolledOnOpenRef.current || messages.length === 0) return;
+    scrolledOnOpenRef.current = true;
+    const id = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(id);
   }, [messages, scrollToBottom]);
 
   const sendMessage = async () => {
@@ -579,7 +574,7 @@ export function FanCommunity() {
         announcement={visibleAnnouncement}
         onDismiss={() => visibleAnnouncement && setDismissedAnnouncementId(visibleAnnouncement.id)}
       />
-      <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef} onScroll={handleScroll}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef}>
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
