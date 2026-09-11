@@ -227,9 +227,17 @@ export function DirectMessages() {
     };
   }, [active?.conversationId, fetchConversations]);
 
+  // Jump to the latest message once when opening a conversation —
+  // no auto-scroll on new messages, so users can scroll freely.
+  const scrolledConvoRef = useRef<string | null>(null);
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    if (!active?.conversationId || !messages.length) return;
+    if (scrolledConvoRef.current === active.conversationId) return;
+    scrolledConvoRef.current = active.conversationId;
+    const id = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(id);
+  }, [active?.conversationId, messages.length, scrollToBottom]);
 
   const selectConversation = (convo: ConversationSummary) => {
     setShowNewPicker(false);
