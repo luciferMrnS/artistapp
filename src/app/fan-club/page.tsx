@@ -9,7 +9,7 @@ export default function FanClubPage() {
       <header className="border-b border-border bg-zinc-900 px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-white">Fan Community</h1>
+            <h1 className="text-xl font-bold text-white">Fan Community - Creed</h1>
             <p className="text-sm text-secondary">Chat, share, and connect with fellow fans</p>
           </div>
           <Link
