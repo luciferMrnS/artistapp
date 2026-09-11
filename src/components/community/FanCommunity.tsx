@@ -283,6 +283,31 @@ export function FanCommunity() {
     emojiPanelRef,
     emojiToggleRef
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchAnnouncement = async () => {
+      try {
+        const res = await fetch("/api/announcements", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const latest = (data.announcements ?? [])[0] ?? null;
+        setAnnouncement(latest ? (latest as AnnouncementData) : null);
+      } catch (err) {
+        console.error("Failed to fetch announcements:", err);
+      }
+    };
+
+    fetchAnnouncement();
+    const interval = setInterval(fetchAnnouncement, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -481,30 +506,6 @@ export function FanCommunity() {
   }
 
   const isArtist = user.role === "artist";
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchAnnouncement = async () => {
-      try {
-        const res = await fetch("/api/announcements", { credentials: "include" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-        const latest = (data.announcements ?? [])[0] ?? null;
-        setAnnouncement(latest ? (latest as AnnouncementData) : null);
-      } catch (err) {
-        console.error("Failed to fetch announcements:", err);
-      }
-    };
-
-    fetchAnnouncement();
-    const interval = setInterval(fetchAnnouncement, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
 
   const visibleAnnouncement =
     announcement && announcement.id !== dismissedAnnouncementId ? announcement : null;
