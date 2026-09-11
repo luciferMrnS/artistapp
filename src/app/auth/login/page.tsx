@@ -148,6 +148,10 @@ export default function LoginPage() {
                 Resend verification email
               </button>
             )}
+            <p className="mt-3 text-xs text-secondary/80">
+              Can&apos;t find it? Check your spam or promotions folder — it can
+              take a few minutes.
+            </p>
           </div>
         )}
 

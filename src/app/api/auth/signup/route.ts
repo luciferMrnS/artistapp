@@ -12,11 +12,10 @@ import type { UserRole } from "@/lib/db";
  * Supports an optional "role" field: "artist" or "fan" (defaults to "fan")
  */
 
-// Supabase Auth sends confirmation emails on a strict schedule (currently
-// 2 per hour per account/IP). Throttle our own signups to match so users get
-// a friendly countdown instead of the raw "email rate limit" error, and so
-// repeated clicks can't burn through Supabase's quota.
-const RATE_LIMIT_MS = 30 * 60 * 1000;
+// Light spam protection only — with a custom SMTP (e.g. Gmail) upstream the
+// 2/hour Supabase limit no longer applies, but rapid-fire duplicate signups
+// are still throttled for a few seconds.
+const RATE_LIMIT_MS = 10 * 1000;
 
 // In-memory throttle — adequate on a single Render instance.
 const sendAttempts = new Map<string, number>();
@@ -83,8 +82,7 @@ export async function POST(req: NextRequest) {
     if (sinceLastSend < RATE_LIMIT_MS) {
       return NextResponse.json(
         {
-          error:
-            "Verification emails are limited to 2 per hour. Please wait before trying again.",
+          error: "Please wait a few seconds, then try again.",
           rateLimited: true,
           retryAfterMs: RATE_LIMIT_MS - sinceLastSend,
         },
@@ -118,8 +116,7 @@ export async function POST(req: NextRequest) {
         console.error("Supabase signup rate-limited:", error.message);
         return NextResponse.json(
           {
-            error:
-              "You've used up this hour's send of verification emails (2 per hour). Please wait about 30 minutes and try again.",
+            error: "Please wait a few seconds, then try again.",
             rateLimited: true,
             retryAfterMs: RATE_LIMIT_MS,
           },

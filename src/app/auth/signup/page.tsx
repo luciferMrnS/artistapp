@@ -112,6 +112,12 @@ export default function SignupPage() {
             <span className="font-semibold text-white">{email}</span>.
             Click it to activate your account.
           </p>
+          <p className="mt-3 text-xs text-secondary/80">
+            Don't see it? It may take a few minutes — check your{" "}
+            <span className="font-semibold text-secondary">spam</span> or{" "}
+            <span className="font-semibold text-secondary">promotions</span>{" "}
+            folder.
+          </p>
           {resendMessage && (
             <p className="mt-3 text-xs text-emerald-400">{resendMessage}</p>
           )}

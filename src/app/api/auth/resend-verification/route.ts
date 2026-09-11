@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAnonAuthClient, getAppUrl } from "@/lib/supabase-auth-client";
 
-// Supabase Auth allows only ~2 confirmation emails per hour per account.
-// Throttle resends to match and surface a friendly message.
-const RATE_LIMIT_MS = 30 * 60 * 1000;
+// Light spam protection only — with a custom SMTP upstream the 2/hour
+// Supabase limit no longer applies, but rapid-fire resends are throttled.
+const RATE_LIMIT_MS = 10 * 1000;
 const resendAttempts = new Map<string, number>();
 
 /**
@@ -28,8 +28,7 @@ export async function POST(req: NextRequest) {
     if (sinceLastSend < RATE_LIMIT_MS) {
       return NextResponse.json(
         {
-          error:
-            "Verification emails are limited to 2 per hour. Please wait a while, then request another.",
+          error: "Please wait a few seconds, then resend.",
           rateLimited: true,
           retryAfterMs: RATE_LIMIT_MS - sinceLastSend,
         },
