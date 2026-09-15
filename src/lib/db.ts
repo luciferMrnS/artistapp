@@ -2793,6 +2793,8 @@ export interface DirectMessage {
   content: string;
   media_url: string | null;
   read: boolean;
+  reply_to_id?: string | null;
+  reactions?: MessageReaction[];
   created_at: string;
 }
 
@@ -2822,7 +2824,8 @@ export async function sendDirectMessage(
   senderId: string,
   recipientId: string,
   content: string,
-  mediaUrl: string | null = null
+  mediaUrl: string | null = null,
+  replyToId: string | null = null
 ): Promise<{
   success: boolean;
   message?: DirectMessage;
@@ -2838,7 +2841,7 @@ export async function sendDirectMessage(
     }
 
     const conversationId = deriveConversationId(senderId, recipientId);
-    const newMessage = {
+    const newMessage: Record<string, unknown> = {
       id: `dm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       conversation_id: conversationId,
       sender_id: senderId,
@@ -2848,12 +2851,31 @@ export async function sendDirectMessage(
       read: false,
       created_at: new Date().toISOString(),
     };
+    if (replyToId) newMessage.reply_to_id = replyToId;
 
     const { data, error } = await supabaseAdmin
       .from("direct_messages")
       .insert([newMessage])
       .select()
       .single();
+
+    // reply_to_id column comes from migration_phase10_dm_interactions.sql —
+    // if it isn't applied yet, fall back to a plain message instead of failing.
+    if (error && replyToId && error.code === "42703") {
+      const retry = await supabaseAdmin
+        .from("direct_messages")
+        .insert([{ ...newMessage, reply_to_id: undefined }])
+        .select()
+        .single();
+      if (retry.error) {
+        if (isTableMissing(retry.error)) {
+          return { success: false, error: "Direct messages are not set up yet" };
+        }
+        console.error("Error sending DM:", retry.error);
+        return { success: false, error: retry.error.message || "Failed to send message" };
+      }
+      return { success: true, message: retry.data as DirectMessage, conversationId };
+    }
 
     if (error) {
       if (isTableMissing(error)) {
@@ -2966,13 +2988,149 @@ export async function getDirectMessages(
       return [];
     }
 
-    return ((data ?? []) as DirectMessage[]).filter(
+    const messages = ((data ?? []) as DirectMessage[]).filter(
       (msg) => msg.sender_id === userId || msg.recipient_id === userId
     );
+
+    const ids = messages.map((m) => m.id);
+    const reactionsByMessage = await getDirectMessageReactionsFor(ids, userId);
+
+    return messages.map((msg) => ({
+      ...msg,
+      reactions: reactionsByMessage[msg.id] ?? [],
+    }));
   } catch (err) {
     console.error("Failed to fetch DMs:", err);
     return [];
   }
+}
+
+/**
+ * Fetch a single DM by id (used to verify participation on reactions and
+ * find who to notify).
+ */
+export async function getDirectMessageById(
+  messageId: string
+): Promise<DirectMessage | null> {
+  if (!messageId) return null;
+  const { data, error } = await supabaseAdmin
+    .from("direct_messages")
+    .select("*")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (error) {
+    if (isTableMissing(error)) return null;
+    console.error("Error fetching DM:", error);
+    return null;
+  }
+  return (data as DirectMessage) ?? null;
+}
+
+/**
+ * Aggregate reactions for a batch of DMs into
+ * `{ [messageId]: MessageReaction[] }`. Degrades to all-empty when the
+ * dm reactions migration hasn't been applied yet.
+ */
+export async function getDirectMessageReactionsFor(
+  messageIds: string[],
+  viewerId: string | null
+): Promise<Record<string, MessageReaction[]>> {
+  const result: Record<string, MessageReaction[]> = {};
+  for (const id of messageIds) result[id] = [];
+  if (messageIds.length === 0) return result;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("direct_message_reactions")
+      .select("message_id, user_id, emoji")
+      .in("message_id", messageIds);
+
+    if (error) {
+      if (isTableMissing(error)) return result;
+      console.error("Error fetching DM reactions:", error);
+      return result;
+    }
+
+    const grouped = new Map<string, Map<string, MessageReaction>>();
+    for (const row of data ?? []) {
+      const set = grouped.get(row.message_id) ?? new Map<string, MessageReaction>();
+      const existing = set.get(row.emoji) ?? {
+        emoji: row.emoji,
+        count: 0,
+        me: false,
+      };
+      existing.count += 1;
+      if (viewerId && row.user_id === viewerId) existing.me = true;
+      set.set(row.emoji, existing);
+      grouped.set(row.message_id, set);
+    }
+
+    for (const [messageId, set] of grouped) {
+      result[messageId] = [...set.values()];
+    }
+  } catch (err) {
+    console.error("getDirectMessageReactionsFor error:", err);
+  }
+
+  return result;
+}
+
+/**
+ * Add the current user's emoji reaction to a DM.
+ * Returns the message's updated reaction summary.
+ */
+export async function addDirectMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<MessageReaction[] | { error: string }> {
+  const { error } = await supabaseAdmin
+    .from("direct_message_reactions")
+    .upsert(
+      {
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: "message_id,user_id,emoji" }
+    );
+
+  if (error) {
+    if (isTableMissing(error)) return { error: "Reactions aren't enabled yet" };
+    console.error("Error adding DM reaction:", error);
+    return { error: error.message || "Failed to add reaction" };
+  }
+
+  const updated = await getDirectMessageReactionsFor([messageId], userId);
+  return updated[messageId] ?? [];
+}
+
+/**
+ * Remove the current user's emoji reaction from a DM.
+ * Returns the message's updated reaction summary.
+ */
+export async function removeDirectMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<MessageReaction[] | { error: string }> {
+  const { error } = await supabaseAdmin
+    .from("direct_message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+
+  if (error) {
+    if (isTableMissing(error)) return { error: "Reactions aren't enabled yet" };
+    console.error("Error removing DM reaction:", error);
+    return { error: error.message || "Failed to remove reaction" };
+  }
+
+  const updated = await getDirectMessageReactionsFor([messageId], userId);
+  return updated[messageId] ?? [];
 }
 
 /**

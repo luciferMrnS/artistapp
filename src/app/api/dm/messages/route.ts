@@ -35,8 +35,9 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/dm/messages
- * Body: { recipientId, content, mediaUrl? }
- * Sends a DM (creates the conversation implicitly)
+ * Body: { recipientId, content, mediaUrl?, replyToId? }
+ * Sends a DM (creates the conversation implicitly). With replyToId the
+ * message references another message in the same conversation.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -52,7 +53,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let body: { recipientId?: unknown; content?: unknown; mediaUrl?: unknown };
+    let body: {
+      recipientId?: unknown;
+      content?: unknown;
+      mediaUrl?: unknown;
+      replyToId?: unknown;
+    };
     try {
       body = await req.json();
     } catch {
@@ -68,12 +74,14 @@ export async function POST(req: NextRequest) {
     }
     const content = typeof body.content === "string" ? body.content : "";
     const mediaUrl = typeof body.mediaUrl === "string" ? body.mediaUrl : null;
+    const replyToId = typeof body.replyToId === "string" ? body.replyToId : null;
 
     const result = await sendDirectMessage(
       user.userId,
       recipientId,
       content,
-      mediaUrl
+      mediaUrl,
+      replyToId
     );
 
     if (!result.success) {

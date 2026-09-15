@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft } from "lucide-react";
+import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -10,6 +10,12 @@ import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
+
+interface MessageReaction {
+  emoji: string;
+  count: number;
+  me: boolean;
+}
 
 interface DMChat {
   id: string;
@@ -19,6 +25,8 @@ interface DMChat {
   content: string;
   media_url: string | null;
   read: boolean;
+  reply_to_id?: string | null;
+  reactions?: MessageReaction[];
   created_at: string;
 }
 
@@ -44,6 +52,198 @@ interface UserOption {
 }
 
 const POLL_INTERVAL = 4000;
+const SWIPE_THRESHOLD = 70; // px before a horizontal swipe triggers an action
+
+const QUICK_REACTS = [
+  "\u2764\uFE0F",
+  "\u{1F602}",
+  "\u{1F44D}",
+  "\u{1F525}",
+  "\u{1F62D}",
+  "\u{1F44F}",
+  "\u{1F929}",
+  "\u{1F60D}",
+];
+
+/** Fire `onLongPress` when a pointer is held still for `ms`. */
+function useLongPress(onLongPress: () => void, ms = 450) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+
+  const clear = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    start.current = null;
+  }, []);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      clear();
+      start.current = { x: e.clientX, y: e.clientY };
+      timer.current = setTimeout(onLongPress, ms);
+    },
+    [clear, ms, onLongPress]
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!timer.current || !start.current) return;
+      if (Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 12) {
+        clear();
+      }
+    },
+    [clear]
+  );
+
+  return { onPointerDown, onPointerMove, onPointerUp: clear, onPointerLeave: clear, onPointerCancel: clear };
+}
+
+interface DmBubbleProps {
+  msg: DMChat;
+  mine: boolean;
+  repliedTo: DMChat | null;
+  repliedToLabel: string | null;
+  disabled: boolean;
+  toggleReaction: (messageId: string, emoji: string) => void;
+  setReplyTo: (m: DMChat | null) => void;
+  setReactFor: (m: DMChat | null) => void;
+}
+
+/**
+ * A single DM bubble with swipe-to-reply (left), swipe-to-react (right)
+ * and long-press-to-react gestures — same as Creed.
+ */
+function DmBubble({
+  msg,
+  mine,
+  repliedTo,
+  repliedToLabel,
+  disabled,
+  toggleReaction,
+  setReplyTo,
+  setReactFor,
+}: DmBubbleProps) {
+  const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
+  const longPress = useLongPress(() => {
+    if (!disabled) setReactFor(msg);
+  });
+  const reactions = msg.reactions ?? [];
+
+  return (
+    <motion.div
+      className={cn(
+        "relative select-none",
+        mine ? "flex justify-end" : "flex justify-start"
+      )}
+      drag="x"
+      dragDirectionLock
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.5}
+      whileDrag={{ zIndex: 5 }}
+      onDrag={(_, info) => {
+        setDragDir(info.offset.x <= -40 ? "reply" : info.offset.x >= 40 ? "react" : null);
+      }}
+      onDragEnd={(_, info) => {
+        setDragDir(null);
+        if (disabled) return;
+        if (info.offset.x <= -SWIPE_THRESHOLD) {
+          setReplyTo(msg);
+        } else if (info.offset.x >= SWIPE_THRESHOLD) {
+          setReactFor(msg);
+        }
+      }}
+      {...longPress}
+    >
+      <div
+        className={cn(
+          "max-w-[75%] rounded-2xl px-4 py-2 text-sm",
+          mine
+            ? "rounded-br-md bg-primary text-white"
+            : "rounded-bl-md bg-zinc-800 text-white"
+        )}
+      >
+        {repliedTo && (
+          <div
+            className={cn(
+              "mb-1 rounded-lg border-l-2 px-2 py-1",
+              mine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
+            )}
+          >
+            <p className="truncate text-[10px] font-semibold text-primary">
+              ↪ {repliedToLabel}
+            </p>
+            <p className="truncate text-xs text-secondary">
+              {repliedTo.content || (repliedTo.media_url ? "[image]" : "…")}
+            </p>
+          </div>
+        )}
+
+        {msg.media_url ? (
+          <img
+            src={msg.media_url}
+            alt=""
+            className="mb-1 max-h-52 rounded-lg object-cover"
+          />
+        ) : null}
+        <span className="break-words">{msg.content}</span>
+
+        {reactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => toggleReaction(msg.id, r.emoji)}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
+                  r.me
+                    ? "border-primary bg-primary/30 text-white"
+                    : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                )}
+              >
+                <span>{r.emoji}</span>
+                <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <p
+          className={cn(
+            "mt-1 text-right text-[10px]",
+            mine ? "text-white/70" : "text-secondary"
+          )}
+        >
+          {formatTime(msg.created_at)}
+        </p>
+      </div>
+
+      {/* Drag feedback hint */}
+      <AnimatePresence>
+        {dragDir && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 text-center"
+          >
+            <span
+              className={cn(
+                "rounded-full bg-black/80 px-3 py-1 text-xs font-semibold",
+                dragDir === "reply" ? "text-primary" : "text-white"
+              )}
+            >
+              {dragDir === "reply" ? "↩ Reply" : "❤️ React"}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
 
 function formatTime(timestamp: string): string {
   const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -76,9 +276,13 @@ export function DirectMessages() {
   const [searchTerm, setSearchTerm] = useState("");
   const [pickerLoading, setPickerLoading] = useState(false);
   const [convoError, setConvoError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<DMChat | null>(null);
+  const [reactFor, setReactFor] = useState<DMChat | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
+
+  const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiToggleRef = useRef<HTMLButtonElement>(null);
@@ -242,6 +446,8 @@ export function DirectMessages() {
   const selectConversation = (convo: ConversationSummary) => {
     setShowNewPicker(false);
     setShowEmoji(false);
+    setReplyTo(null);
+    setReactFor(null);
     setActive({
       conversationId: convo.conversation_id,
       recipient: {
@@ -283,6 +489,8 @@ export function DirectMessages() {
   const pickUser = (option: UserOption) => {
     const existing = conversations.find((c) => c.other_user.id === option.id);
     setShowNewPicker(false);
+    setReplyTo(null);
+    setReactFor(null);
     if (existing) {
       selectConversation(existing);
     } else {
@@ -299,13 +507,14 @@ export function DirectMessages() {
     if (!recipientId || (!content && sending)) return;
     if (!content) return;
 
+    const replyId = replyTo?.id ?? null;
     setSending(true);
     setConvoError(null);
     try {
       const res = await fetch("/api/dm/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientId, content }),
+        body: JSON.stringify({ recipientId, content, replyToId: replyId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -313,6 +522,7 @@ export function DirectMessages() {
         return;
       }
       setMessages((prev) => [...prev, data.message as DMChat]);
+      if (replyTo) setReplyTo(null);
       if (!active.conversationId) {
         setActive({
           conversationId: data.conversationId as string,
@@ -329,6 +539,31 @@ export function DirectMessages() {
       setSending(false);
     }
   };
+
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!user || user.restricted_at) return;
+      try {
+        const res = await fetch(`/api/dm/messages/${messageId}/reactions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji }),
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: "Failed to react" }));
+          if (errorData?.error) console.warn(errorData.error);
+          return;
+        }
+        const data = await res.json();
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, reactions: data.reactions } : m))
+        );
+      } catch (e) {
+        console.error("Failed to toggle reaction:", e);
+      }
+    },
+    [user]
+  );
 
   const filteredUsers = userOptions.filter((u) =>
     u.username.toLowerCase().includes(searchTerm.trim().toLowerCase())
@@ -503,45 +738,69 @@ export function DirectMessages() {
               ) : (
                 messages.map((msg) => {
                   const mine = msg.sender_id === user?.id;
+                  const repliedTo = messagesById.get(msg.reply_to_id ?? "") ?? null;
                   return (
-                    <div
+                    <DmBubble
                       key={msg.id}
-                      className={cn(
-                        "flex",
-                        mine ? "justify-end" : "justify-start"
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "max-w-[75%] rounded-2xl px-4 py-2 text-sm",
-                          mine
-                            ? "rounded-br-md bg-primary text-white"
-                            : "rounded-bl-md bg-zinc-800 text-white"
-                        )}
-                      >
-                        {msg.media_url ? (
-                          <img
-                            src={msg.media_url}
-                            alt=""
-                            className="mb-1 max-h-52 rounded-lg object-cover"
-                          />
-                        ) : null}
-                        {msg.content}
-                        <p
-                          className={cn(
-                            "mt-1 text-right text-[10px]",
-                            mine ? "text-white/70" : "text-secondary"
-                          )}
-                        >
-                          {formatTime(msg.created_at)}
-                        </p>
-                      </div>
-                    </div>
+                      msg={msg}
+                      mine={mine}
+                      repliedTo={repliedTo}
+                      repliedToLabel={
+                        repliedTo
+                          ? repliedTo.sender_id === user?.id
+                            ? "You"
+                            : active.recipient.username
+                          : null
+                      }
+                      disabled={!!user?.restricted_at}
+                      toggleReaction={toggleReaction}
+                      setReplyTo={setReplyTo}
+                      setReactFor={setReactFor}
+                    />
                   );
                 })
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Emoji reaction sheet — triggered by swipe-right or long-press */}
+            <AnimatePresence>
+              {reactFor && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="border-t border-border bg-zinc-900 p-3"
+                >
+                  <div className="mb-1 flex items-center justify-between px-1">
+                    <span className="text-xs font-semibold text-secondary">
+                      React to {reactFor.sender_id === user?.id ? "your message" : active.recipient.username}
+                    </span>
+                    <button
+                      onClick={() => setReactFor(null)}
+                      className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                      aria-label="Close reactions"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-8 gap-1">
+                    {QUICK_REACTS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => {
+                          toggleReaction(reactFor.id, emoji);
+                          setReactFor(null);
+                        }}
+                        className="rounded-lg p-2 text-2xl transition hover:bg-white/10"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="border-t border-border p-3">
               {user?.restricted_at ? (
@@ -554,6 +813,37 @@ export function DirectMessages() {
                   {convoError && (
                     <p className="mb-2 text-xs text-red-500">{convoError}</p>
                   )}
+                  {/* Reply-to bar */}
+                  <AnimatePresence>
+                    {replyTo && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        className="mb-2 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2"
+                      >
+                        <Reply className="h-4 w-4 shrink-0 text-primary" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold text-primary">
+                            Replying to{" "}
+                            {replyTo.sender_id === user?.id
+                              ? "yourself"
+                              : active.recipient.username}
+                          </p>
+                          <p className="truncate text-xs text-secondary">
+                            {replyTo.content || (replyTo.media_url ? "[image]" : "…")}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setReplyTo(null)}
+                          className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                          aria-label="Cancel reply"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <AnimatePresence>
                     {showEmoji && (
                       <motion.div
@@ -597,7 +887,7 @@ export function DirectMessages() {
                         setInput(e.target.value);
                         if (convoError) setConvoError(null);
                       }}
-                      placeholder={`Message ${active.recipient.username}...`}
+                      placeholder={replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
                       className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
                     />
                     <button
