@@ -12,6 +12,8 @@ import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
+import { useJumpToBottom } from "@/hooks/useJumpToBottom";
+import { JumpToLatest } from "@/components/ui/JumpToLatest";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import {
   AnnouncementBanner,
@@ -320,24 +322,22 @@ export function FanCommunity() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   // Scroll to the newest message exactly once when the page is first opened —
   // new incoming messages never yank the user's scroll position afterwards.
   const scrolledOnOpenRef = useRef(false);
+
+  const {
+    setContainerRef,
+    showButton: showJumpToLatest,
+    jumpToBottom,
+    rememberOpenScroll,
+    refreshPosition,
+  } = useJumpToBottom();
 
   const messagesById = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
     [messages]
   );
-
-  const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, []);
-
-  const forceScrollToBottom = useCallback(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -387,9 +387,17 @@ export function FanCommunity() {
   useEffect(() => {
     if (scrolledOnOpenRef.current || messages.length === 0) return;
     scrolledOnOpenRef.current = true;
-    const id = requestAnimationFrame(scrollToBottom);
+    rememberOpenScroll();
+    const id = requestAnimationFrame(jumpToBottom);
     return () => cancelAnimationFrame(id);
-  }, [messages, scrollToBottom]);
+  }, [messages, jumpToBottom, rememberOpenScroll]);
+
+  // Keep the "jump to latest" button in sync when the message list changes —
+  // e.g. a new message arrives while the user is reading older messages.
+  useEffect(() => {
+    if (!messages.length) return;
+    return refreshPosition();
+  }, [messages, refreshPosition]);
 
   const sendMessage = async () => {
     if (!input.trim() || isSending) return;
@@ -423,7 +431,7 @@ export function FanCommunity() {
       if (replyTo) setReplyTo(null);
       await fetchMessages();
       // Sending a message snaps you back to the newest message.
-      forceScrollToBottom();
+      jumpToBottom();
     } catch (e) {
       console.error("Failed to send:", e);
     }
@@ -464,7 +472,7 @@ export function FanCommunity() {
         }
         if (replyTo) setReplyTo(null);
         await fetchMessages();
-        forceScrollToBottom();
+        jumpToBottom();
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Failed to upload image");
@@ -574,34 +582,40 @@ export function FanCommunity() {
         announcement={visibleAnnouncement}
         onDismiss={() => visibleAnnouncement && setDismissedAnnouncementId(visibleAnnouncement.id)}
       />
-      <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef}>
-        {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <MessageCircle className="mb-3 h-12 w-12 text-secondary" />
-            <p className="text-secondary">No messages yet. Be the first to say something!</p>
-          </div>
-        ) : (
-          <AnimatePresence initial={false}>
-            {messages.map((msg) => (
-              <MessageRow
-                key={msg.id}
-                msg={msg}
-                isMine={msg.user_id === user.id}
-                repliedTo={messagesById.get(msg.reply_to_id ?? "") ?? null}
-                disabled={reactionsDisabled}
-                toggleReaction={toggleReaction}
-                setReplyTo={setReplyTo}
-                setReactFor={setReactFor}
-                setPreview={setPreview}
-              />
-            ))}
-          </AnimatePresence>
-        )}
-        <div ref={messagesEndRef} />
+      <div className="relative flex-1 overflow-hidden">
+        <div
+          ref={setContainerRef}
+          className="absolute inset-0 space-y-3 overflow-y-auto p-4"
+        >
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <MessageCircle className="mb-3 h-12 w-12 text-secondary" />
+              <p className="text-secondary">No messages yet. Be the first to say something!</p>
+            </div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {messages.map((msg) => (
+                <MessageRow
+                  key={msg.id}
+                  msg={msg}
+                  isMine={msg.user_id === user.id}
+                  repliedTo={messagesById.get(msg.reply_to_id ?? "") ?? null}
+                  disabled={reactionsDisabled}
+                  toggleReaction={toggleReaction}
+                  setReplyTo={setReplyTo}
+                  setReactFor={setReactFor}
+                  setPreview={setPreview}
+                />
+              ))}
+            </AnimatePresence>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <JumpToLatest show={showJumpToLatest} onClick={jumpToBottom} />
       </div>
 
       <AnimatePresence>

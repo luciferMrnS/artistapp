@@ -10,6 +10,8 @@ import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
+import { useJumpToBottom } from "@/hooks/useJumpToBottom";
+import { JumpToLatest } from "@/components/ui/JumpToLatest";
 
 interface MessageReaction {
   emoji: string;
@@ -282,6 +284,14 @@ export function DirectMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
 
+  const {
+    setContainerRef,
+    showButton: showJumpToLatest,
+    jumpToBottom,
+    rememberOpenScroll,
+    refreshPosition,
+  } = useJumpToBottom();
+
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   const emojiPanelRef = useRef<HTMLDivElement>(null);
@@ -439,9 +449,17 @@ export function DirectMessages() {
     if (!active?.conversationId || !messages.length) return;
     if (scrolledConvoRef.current === active.conversationId) return;
     scrolledConvoRef.current = active.conversationId;
+    rememberOpenScroll();
     const id = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(id);
-  }, [active?.conversationId, messages.length, scrollToBottom]);
+  }, [active?.conversationId, messages.length, scrollToBottom, rememberOpenScroll]);
+
+  // Keep the "jump to latest" button in sync when the message list changes —
+  // e.g. a new message arrives while the user is reading older messages.
+  useEffect(() => {
+    if (!messages.length) return;
+    return refreshPosition();
+  }, [active?.conversationId, messages, refreshPosition]);
 
   const selectConversation = (convo: ConversationSummary) => {
     setShowNewPicker(false);
@@ -730,37 +748,43 @@ export function DirectMessages() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {messages.length === 0 ? (
-                <p className="py-10 text-center text-sm text-secondary">
-                  Say hello to {active.recipient.username}!
-                </p>
-              ) : (
-                messages.map((msg) => {
-                  const mine = msg.sender_id === user?.id;
-                  const repliedTo = messagesById.get(msg.reply_to_id ?? "") ?? null;
-                  return (
-                    <DmBubble
-                      key={msg.id}
-                      msg={msg}
-                      mine={mine}
-                      repliedTo={repliedTo}
-                      repliedToLabel={
-                        repliedTo
-                          ? repliedTo.sender_id === user?.id
-                            ? "You"
-                            : active.recipient.username
-                          : null
-                      }
-                      disabled={!!user?.restricted_at}
-                      toggleReaction={toggleReaction}
-                      setReplyTo={setReplyTo}
-                      setReactFor={setReactFor}
-                    />
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
+            <div className="relative flex-1 overflow-hidden">
+              <div
+                ref={setContainerRef}
+                className="absolute inset-0 space-y-3 overflow-y-auto p-4"
+              >
+                {messages.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-secondary">
+                    Say hello to {active.recipient.username}!
+                  </p>
+                ) : (
+                  messages.map((msg) => {
+                    const mine = msg.sender_id === user?.id;
+                    const repliedTo = messagesById.get(msg.reply_to_id ?? "") ?? null;
+                    return (
+                      <DmBubble
+                        key={msg.id}
+                        msg={msg}
+                        mine={mine}
+                        repliedTo={repliedTo}
+                        repliedToLabel={
+                          repliedTo
+                            ? repliedTo.sender_id === user?.id
+                              ? "You"
+                              : active.recipient.username
+                            : null
+                        }
+                        disabled={!!user?.restricted_at}
+                        toggleReaction={toggleReaction}
+                        setReplyTo={setReplyTo}
+                        setReactFor={setReactFor}
+                      />
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              <JumpToLatest show={showJumpToLatest} onClick={jumpToBottom} />
             </div>
 
             {/* Emoji reaction sheet — triggered by swipe-right or long-press */}
