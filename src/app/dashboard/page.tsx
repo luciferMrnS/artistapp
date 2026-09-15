@@ -16,6 +16,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { NewsletterForm } from "@/components/dashboard/NewsletterForm";
 import { SubscribersSection } from "@/components/dashboard/SubscribersSection";
+import { PostPerformance } from "@/components/dashboard/PostPerformance";
 import { verifyToken } from "@/lib/server-auth";
 import { getArtistStats, getRegisteredFans, type ArtistStats, type RegisteredFanRow } from "@/lib/db";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -25,20 +26,6 @@ function formatCompactNumber(value: number): string {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
-}
-
-function formatTimeDifference(date: string): string {
-  const now = new Date();
-  const past = new Date(date);
-  const diffMs = now.getTime() - past.getTime();
-  const diffMin = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMin / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMin < 1) return "now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
 }
 
 function StatCard({
@@ -73,10 +60,6 @@ function DashboardContent({
   fans: RegisteredFanRow[];
 }) {
   const maxEngagement = stats.topFans[0]?.total ?? 0;
-  const maxPostEngagement = stats.posts.reduce(
-    (max, post) => Math.max(max, post.likes_count + post.comments_count),
-    0
-  );
   const medalColors = [
     "bg-amber-400/15 text-amber-300",
     "bg-zinc-400/15 text-zinc-300",
@@ -203,62 +186,7 @@ function DashboardContent({
             </section>
 
             {/* Post performance */}
-            <section className="rounded-2xl border border-border bg-zinc-900 p-5">
-              <h2 className="mb-4 text-lg font-semibold">Post performance</h2>
-
-              {stats.posts.length === 0 ? (
-                <p className="text-sm text-secondary">
-                  No posts yet — create your first post to see stats here.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {stats.posts.map((post) => {
-                    const engagement = post.likes_count + post.comments_count;
-                    const width = maxPostEngagement
-                      ? (engagement / maxPostEngagement) * 100
-                      : 0;
-                    return (
-                      <li
-                        key={post.id}
-                        className="rounded-xl bg-black/40 px-3 py-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="line-clamp-1 flex-1 text-sm">
-                            {post.image ? (
-                              <img
-                                src={post.image}
-                                alt=""
-                                className="mr-2 inline h-8 w-8 rounded-lg object-cover align-middle"
-                              />
-                            ) : null}
-                            {post.content || "(no text)"}
-                          </p>
-                          <span className="shrink-0 text-xs text-secondary">
-                            {formatTimeDifference(post.created_at)}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-4 text-xs text-secondary">
-                          <span className="inline-flex items-center gap-1">
-                            <Heart className="h-3.5 w-3.5 text-pink-500" />
-                            {post.likes_count}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <MessageSquare className="h-3.5 w-3.5 text-sky-400" />
-                            {post.comments_count}
-                          </span>
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-primary to-pink-500"
-                              style={{ width: `${width}%` }}
-                            />
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+            <PostPerformance posts={stats.posts} />
 
             {/* Fan accounts list */}
             <SubscribersSection fans={fans} />
