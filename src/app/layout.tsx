@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 import { PwaSetup } from "@/components/pwa/PwaSetup";
 import { SelfKeepAlive } from "@/components/SelfKeepAlive";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -79,10 +80,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-black text-white">
         <AuthProvider>
-          <PresenceHeartbeat />
-          <SelfKeepAlive />
-          <PwaSetup />
-          {children}
+          <ToastProvider>
+            <PresenceHeartbeat />
+            <SelfKeepAlive />
+            <PwaSetup />
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

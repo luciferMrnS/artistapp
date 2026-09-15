@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/ui/Toast";
 
 interface SubscribeButtonProps {
   /** The artist to subscribe to (hidden if missing or if it's the current user) */
@@ -20,6 +21,7 @@ interface SubscribeButtonProps {
  */
 export function SubscribeButton({ artistId }: SubscribeButtonProps) {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [subscribed, setSubscribed] = useState(false);
   const [subscribers, setSubscribers] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +58,7 @@ export function SubscribeButton({ artistId }: SubscribeButtonProps) {
   const toggleSubscription = async () => {
     if (!artistId || isLoading) return;
 
+    const wasSubscribed = subscribed;
     setIsLoading(true);
     try {
       const res = await fetch("/api/follow", {
@@ -69,6 +72,7 @@ export function SubscribeButton({ artistId }: SubscribeButtonProps) {
       if (res.ok) {
         setSubscribed(Boolean(data.following));
         setSubscribers(data.counts?.followers ?? subscribers);
+        showToast(wasSubscribed ? "You unsubscribed" : "You subscribed");
       }
     } catch (error) {
       console.error("Subscribe action failed:", error);
