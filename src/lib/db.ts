@@ -2861,7 +2861,11 @@ export async function sendDirectMessage(
 
     // reply_to_id column comes from migration_phase10_dm_interactions.sql —
     // if it isn't applied yet, fall back to a plain message instead of failing.
-    if (error && replyToId && error.code === "42703") {
+    if (
+      error &&
+      replyToId &&
+      (error.code === "42703" || error.code === "PGRST204")
+    ) {
       const retry = await supabaseAdmin
         .from("direct_messages")
         .insert([{ ...newMessage, reply_to_id: undefined }])
@@ -3372,7 +3376,11 @@ export async function createMessage(
 
   // reply_to_id column comes from migration_creed_interactions.sql — if it
   // isn't applied yet, fall back to a plain message instead of failing.
-  if (error && replyToId && error.code === "42703") {
+  if (
+    error &&
+    replyToId &&
+    (error.code === "42703" || error.code === "PGRST204")
+  ) {
     const retry = await supabaseAdmin
       .from("messages")
       .insert([{ ...insertRow, reply_to_id: undefined }])
