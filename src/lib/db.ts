@@ -3249,7 +3249,7 @@ export async function getRecentMessages(
   const { data, error } = await supabaseAdmin
     .from("messages")
     .select("*")
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -3257,10 +3257,12 @@ export async function getRecentMessages(
     return [];
   }
 
-  const messages = ((data ?? []) as Message[]).map((msg) => ({
-    ...msg,
-    media_url: resolveCommunityMediaUrl(msg.media_url),
-  }));
+  const messages = ((data ?? []) as Message[])
+    .reverse()
+    .map((msg) => ({
+      ...msg,
+      media_url: resolveCommunityMediaUrl(msg.media_url),
+    }));
 
   const ids = messages.map((m) => m.id);
   const reactionsByMessage = await getMessageReactionsFor(ids, viewerId);
