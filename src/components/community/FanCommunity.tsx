@@ -52,9 +52,57 @@ const QUICK_REACTS = [
 
 const POLL_INTERVAL = 3000;
 const SWIPE_THRESHOLD = 70; // px before a horizontal swipe triggers an action
+const MAX_MENTION_SUGGESTIONS = 8;
 
 const formatTime = (d: string) =>
   new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+interface MentionUser {
+  id: string;
+  username: string;
+  avatar: string | null;
+  role: string;
+}
+
+interface ActiveMention {
+  start: number;
+  end: number;
+  query: string;
+}
+
+/**
+ * Detect an in-progress mention token right before the caret:
+ * an `@` at the start of a word (or after whitespace) with no
+ * whitespace between it and the caret — e.g. "hey @kd" while typing.
+ */
+function detectMention(
+  value: string,
+  caret: number
+): ActiveMention | null {
+  const before = value.slice(0, caret);
+  const match = before.match(/(^|\s)@([^\s@]*)$/);
+  if (!match) return null;
+  const start = caret - match[2].length - 1; // index of the `@`
+  return { start, end: caret, query: match[2] };
+}
+
+/**
+ * Split a message body into text and `@username` tokens so mentions can be
+ * highlighted. Any @-token is styled — typed names work too even if they
+ * don't match a real account.
+ */
+function renderMentionContent(content: string) {
+  const parts = content.split(/(@[\w.]+)/g);
+  return parts.map((part, i) =>
+    /^@[\w.]+$/.test(part) ? (
+      <span key={i} className="font-semibold text-primary">
+        {part}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    )
+  );
+}
 
 /** Fire `onLongPress` when a pointer is held still for `ms`. */
 function useLongPress(onLongPress: () => void, ms = 450) {
@@ -210,7 +258,7 @@ function MessageRow({
               />
             </button>
           ) : (
-            <span className="break-words">{msg.content}</span>
+            <span className="break-words">{renderMentionContent(msg.content)}</span>
           )}
         </div>
 
@@ -288,12 +336,44 @@ export function FanCommunity() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiToggleRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mentionPanelRef = useRef<HTMLDivElement>(null);
+  const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
+  const [mention, setMention] = useState<ActiveMention | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const mentionMatches = useMemo(() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    const filtered = q
+      ? mentionUsers.filter((u) => u.username.toLowerCase().includes(q))
+      : mentionUsers;
+    return filtered.slice(0, MAX_MENTION_SUGGESTIONS);
+  }, [mention, mentionUsers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dm/users", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.users) setMentionUsers(data.users);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useDismissOnClickOutside(
     showEmoji,
     () => setShowEmoji(false),
     emojiPanelRef,
     emojiToggleRef
+  );
+
+  useDismissOnClickOutside(
+    !!mention,
+    () => setMention(null),
+    mentionPanelRef,
+    inputRef
   );
 
   useEffect(() => {
@@ -399,12 +479,65 @@ export function FanCommunity() {
     return refreshPosition();
   }, [messages, refreshPosition]);
 
+  const selectMention = (u: MentionUser) => {
+    if (!mention) return;
+    const next =
+      input.slice(0, mention.start) + " @" + u.username + " " + input.slice(mention.end);
+    const caret = mention.start + u.username.length + 2;
+    setInput(next);
+    setMention(null);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(caret, caret);
+    });
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const caret = e.target.selectionStart ?? value.length;
+    setInput(value);
+    setMention(detectMention(value, caret));
+    setMentionIndex(0);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (mention && mentionMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex(
+          (i) => (i - 1 + mentionMatches.length) % mentionMatches.length
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        selectMention(mentionMatches[mentionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isSending) return;
     if (user?.restricted_at) {
       window.alert("You have limited access, try again later");
       return;
     }
+    setMention(null);
     const content = input.trim();
     const replyId = replyTo?.id ?? null;
     setInput("");
@@ -673,7 +806,7 @@ export function FanCommunity() {
         )}
       </AnimatePresence>
 
-      <div className="border-t border-border bg-zinc-900 p-3">
+      <div className="relative border-t border-border bg-zinc-900 p-3">
         {uploadError && (
           <p className="mb-2 px-1 text-xs text-red-400">{uploadError}</p>
         )}
@@ -703,6 +836,61 @@ export function FanCommunity() {
               >
                 <X className="h-4 w-4" />
               </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mention suggestions — pops up while typing @name */}
+        <AnimatePresence>
+          {mention && (
+            <motion.div
+              ref={mentionPanelRef}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="absolute bottom-full left-3 right-3 z-30 mb-2 overflow-hidden rounded-xl border border-border bg-zinc-800 shadow-2xl"
+            >
+              {mentionMatches.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-secondary">
+                  No users match “{mention.query}”
+                </p>
+              ) : (
+                <ul className="max-h-64 overflow-y-auto">
+                  {mentionMatches.map((u, i) => (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        onMouseEnter={() => setMentionIndex(i)}
+                        onClick={() => selectMention(u)}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-3 py-2 text-left transition",
+                          i === mentionIndex ? "bg-white/10" : "hover:bg-white/5"
+                        )}
+                      >
+                        {u.avatar ? (
+                          <img
+                            src={resolveAvatarUrl(u.avatar)}
+                            alt={u.username}
+                            className="h-8 w-8 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-purple-500 text-[10px] font-bold text-white">
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          @{u.username}
+                        </span>
+                        {u.role === "artist" && (
+                          <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            Artist
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -740,10 +928,11 @@ export function FanCommunity() {
                 </button>
               )}
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                onChange={handleInputChange}
+                onKeyDown={handleInputKeyDown}
                 placeholder={replyTo ? "Reply…" : "Say something..."}
                 className="flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary"
               />
