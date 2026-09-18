@@ -95,7 +95,7 @@ function renderMentionContent(content: string) {
   const parts = content.split(/(@[\w.]+)/g);
   return parts.map((part, i) =>
     /^@[\w.]+$/.test(part) ? (
-      <span key={i} className="font-semibold text-primary">
+      <span key={i} className="font-semibold text-red-500">
         {part}
       </span>
     ) : (
