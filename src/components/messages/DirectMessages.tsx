@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X } from "lucide-react";
+import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -12,6 +12,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 import { useJumpToBottom } from "@/hooks/useJumpToBottom";
 import { JumpToLatest } from "@/components/ui/JumpToLatest";
+import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
+import { UploadProgress } from "@/components/ui/UploadProgress";
+import { Lightbox } from "@/components/ui/Lightbox";
 
 interface MessageReaction {
   emoji: string;
@@ -112,6 +115,7 @@ interface DmBubbleProps {
   toggleReaction: (messageId: string, emoji: string) => void;
   setReplyTo: (m: DMChat | null) => void;
   setReactFor: (m: DMChat | null) => void;
+  setPreview: (url: string) => void;
 }
 
 /**
@@ -127,6 +131,7 @@ function DmBubble({
   toggleReaction,
   setReplyTo,
   setReactFor,
+  setPreview,
 }: DmBubbleProps) {
   const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
   const longPress = useLongPress(() => {
@@ -184,11 +189,18 @@ function DmBubble({
         )}
 
         {msg.media_url ? (
-          <img
-            src={msg.media_url}
-            alt=""
-            className="mb-1 max-h-52 rounded-lg object-cover"
-          />
+          <button
+            type="button"
+            onClick={() => setPreview(msg.media_url!)}
+            aria-label="Open image full screen"
+            className="mb-1 block cursor-zoom-in"
+          >
+            <img
+              src={msg.media_url}
+              alt=""
+              className="max-h-52 rounded-lg object-cover"
+            />
+          </button>
         ) : null}
         <span className="break-words">{msg.content}</span>
 
@@ -273,6 +285,10 @@ export function DirectMessages() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
   const [showNewPicker, setShowNewPicker] = useState(false);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -282,6 +298,7 @@ export function DirectMessages() {
   const [reactFor, setReactFor] = useState<DMChat | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
 
   const {
@@ -558,6 +575,67 @@ export function DirectMessages() {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const recipientId = active?.recipient.id;
+    if (!file || isUploading || !recipientId) return;
+    if (user?.restricted_at) {
+      window.alert("You have limited access, try again later");
+      return;
+    }
+    setConvoError(null);
+    setIsUploading(true);
+    setUploadError("");
+    setUploadProgress(0);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await uploadWithProgress(
+        "/api/dm/messages/upload-image",
+        formData,
+        setUploadProgress
+      );
+      if (!res.ok) {
+        throw new Error(uploadErrorOf(res, `HTTP error! status: ${res.status}`));
+      }
+      const url = res.data?.url;
+      if (typeof url === "string") {
+        const res2 = await fetch("/api/dm/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId,
+            content: "",
+            mediaUrl: url,
+            replyToId: replyTo?.id ?? null,
+          }),
+        });
+        const data = await res2.json();
+        if (!res2.ok) {
+          throw new Error(data.error || "Could not send message");
+        }
+        setMessages((prev) => [...prev, data.message as DMChat]);
+        if (replyTo) setReplyTo(null);
+        if (!active.conversationId) {
+          setActive({
+            conversationId: data.conversationId as string,
+            recipient: active.recipient,
+          });
+          activeConversationIdRef.current = data.conversationId as string;
+        }
+        setShowEmoji(false);
+        fetchConversations();
+        jumpToBottom();
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload image");
+      console.error("Failed to send image:", err);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string) => {
       if (!user || user.restricted_at) return;
@@ -778,6 +856,7 @@ export function DirectMessages() {
                         toggleReaction={toggleReaction}
                         setReplyTo={setReplyTo}
                         setReactFor={setReactFor}
+                        setPreview={setPreview}
                       />
                     );
                   })
@@ -837,6 +916,9 @@ export function DirectMessages() {
                   {convoError && (
                     <p className="mb-2 text-xs text-red-500">{convoError}</p>
                   )}
+                  {uploadError && (
+                    <p className="mb-2 px-1 text-xs text-red-400">{uploadError}</p>
+                  )}
                   {/* Reply-to bar */}
                   <AnimatePresence>
                     {replyTo && (
@@ -892,39 +974,68 @@ export function DirectMessages() {
                       sendMessage();
                     }}
                   >
-                    <button
-                      ref={emojiToggleRef}
-                      type="button"
-                      onClick={() => setShowEmoji((v) => !v)}
-                      className={cn(
-                        "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
-                        showEmoji
-                          ? "bg-primary text-white"
-                          : "text-secondary hover:bg-white/10"
-                      )}
-                    >
-                      <Smile className="h-5 w-5" />
-                    </button>
-                    <input
-                      value={input}
-                      onChange={(e) => {
-                        setInput(e.target.value);
-                        if (convoError) setConvoError(null);
-                      }}
-                      placeholder={replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
-                      className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sending || !input.trim()}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition hover:opacity-90 disabled:opacity-40"
-                    >
-                      {sending ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Send className="h-5 w-5" />
-                      )}
-                    </button>
+                    {isUploading ? (
+                      <UploadProgress
+                        percent={uploadProgress}
+                        size={40}
+                        label="Uploading…"
+                        className="mx-auto"
+                      />
+                    ) : (
+                      <>
+                        <button
+                          ref={emojiToggleRef}
+                          type="button"
+                          onClick={() => setShowEmoji((v) => !v)}
+                          className={cn(
+                            "inline-flex h-10 w-10 items-center justify-center rounded-full transition",
+                            showEmoji
+                              ? "bg-primary text-white"
+                              : "text-secondary hover:bg-white/10"
+                          )}
+                        >
+                          <Smile className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-secondary transition hover:bg-white/10 disabled:opacity-50"
+                          aria-label="Send an image"
+                          title="Send an image"
+                        >
+                          <ImageIcon className="h-5 w-5" />
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                        <input
+                          value={input}
+                          onChange={(e) => {
+                            setInput(e.target.value);
+                            if (convoError) setConvoError(null);
+                            if (uploadError) setUploadError("");
+                          }}
+                          placeholder={replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
+                          className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
+                        />
+                        <button
+                          type="submit"
+                          disabled={sending || !input.trim()}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition hover:opacity-90 disabled:opacity-40"
+                        >
+                          {sending ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-5 w-5" />
+                          )}
+                        </button>
+                      </>
+                    )}
                   </form>
                 </>
               )}
@@ -932,6 +1043,7 @@ export function DirectMessages() {
           </>
         )}
       </section>
+      {preview && <Lightbox src={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
