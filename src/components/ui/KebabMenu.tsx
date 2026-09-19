@@ -14,6 +14,8 @@ interface KebabMenuProps {
   editLabel?: string;
   /** Runs when the edit action is selected */
   onEdit?: () => void;
+  /** Which side of the trigger the menu drops out to */
+  placement?: "bottom" | "top";
 }
 
 /**
@@ -26,6 +28,7 @@ export function KebabMenu({
   onDelete,
   editLabel = "Edit",
   onEdit,
+  placement = "bottom",
 }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -86,7 +89,11 @@ export function KebabMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-[170px] rounded-xl border border-border bg-zinc-900 p-1 shadow-xl"
+          className={`absolute right-0 z-50 min-w-[170px] rounded-xl border border-border bg-zinc-900 p-1 shadow-xl ${
+            placement === "top"
+              ? "bottom-full mb-1"
+              : "top-full mt-1"
+          }`}
         >
           {onEdit && (
             <button

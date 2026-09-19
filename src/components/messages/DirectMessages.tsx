@@ -270,6 +270,7 @@ function DmBubble({
 
       {mine && !deleted && !disabled && (
         <KebabMenu
+          placement="top"
           deleteLabel="Delete message"
           onDelete={() => onDeleteMessage(msg)}
           editLabel={editable ? "Edit message" : undefined}
