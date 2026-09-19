@@ -100,6 +100,9 @@ export function useJumpToBottom() {
 
   return {
     setContainerRef,
+    // Exposed so other logic (e.g. scrolling to a specific message) can act on
+    // the same scroll container this hook tracks.
+    containerRef,
     showButton,
     jumpToBottom,
     rememberOpenScroll,

@@ -13,6 +13,7 @@ import { UserDmLink } from "@/components/dm/UserDmLink";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 import { useJumpToBottom } from "@/hooks/useJumpToBottom";
+import { useScrollToMessage } from "@/hooks/useScrollToMessage";
 import { JumpToLatest } from "@/components/ui/JumpToLatest";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import {
@@ -144,11 +145,14 @@ interface MessageRowProps {
   msg: Message;
   isMine: boolean;
   repliedTo: Message | null;
+  replyToId: string | null;
+  highlighted: boolean;
   disabled: boolean;
   toggleReaction: (messageId: string, emoji: string) => void;
   setReplyTo: (m: Message | null) => void;
   setReactFor: (m: Message | null) => void;
   setPreview: (url: string) => void;
+  onJumpToReply: (messageId: string) => void;
 }
 
 /**
@@ -159,11 +163,14 @@ function MessageRow({
   msg,
   isMine,
   repliedTo,
+  replyToId,
+  highlighted,
   disabled,
   toggleReaction,
   setReplyTo,
   setReactFor,
   setPreview,
+  onJumpToReply,
 }: MessageRowProps) {
   const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
   const longPress = useLongPress(() => {
@@ -173,8 +180,10 @@ function MessageRow({
 
   return (
     <motion.div
+      data-message-id={msg.id}
       className={cn(
-        "relative select-none gap-3",
+        "relative select-none gap-3 rounded-xl transition-shadow",
+        highlighted && "ring-2 ring-primary shadow-[0_0_24px_rgba(29,155,240,0.35)]",
         isMine ? "flex flex-row-reverse" : "flex flex-row"
       )}
       drag="x"
@@ -226,20 +235,25 @@ function MessageRow({
           </UserDmLink>
         </p>
 
-        {repliedTo && (
-          <div
+        {(repliedTo || replyToId) && (
+          <button
+            type="button"
+            onClick={() => replyToId && onJumpToReply(replyToId)}
+            title="Jump to the original message"
             className={cn(
-              "mt-1 rounded-lg border-l-2 px-2 py-1",
+              "mt-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
               isMine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
             )}
           >
             <p className="truncate text-[10px] font-semibold text-primary">
-              ↪ {repliedTo.username}
+              ↪ {repliedTo ? repliedTo.username : "Message"}
             </p>
             <p className="truncate text-xs text-secondary">
-              {repliedTo.content || (repliedTo.media_url ? "[image]" : "…")}
+              {repliedTo
+                ? repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
+                : "Load original message"}
             </p>
-          </div>
+          </button>
         )}
 
         <div className="mt-0.5 text-sm">
@@ -408,11 +422,14 @@ export function FanCommunity() {
 
   const {
     setContainerRef,
+    containerRef,
     showButton: showJumpToLatest,
     jumpToBottom,
     rememberOpenScroll,
     refreshPosition,
   } = useJumpToBottom();
+
+  const { highlightedId, scrollToMessage } = useScrollToMessage(containerRef);
 
   const messagesById = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
@@ -478,6 +495,48 @@ export function FanCommunity() {
     if (!messages.length) return;
     return refreshPosition();
   }, [messages, refreshPosition]);
+
+  // When the user taps a reply preview whose original message isn't loaded
+  // (outside the recent window), it is fetched and inserted above; this ref
+  // holds the id until it shows up in the list, then we scroll to it.
+  const pendingJumpRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending || !messagesById.has(pending)) return;
+    pendingJumpRef.current = null;
+    const id = requestAnimationFrame(() => scrollToMessage(pending));
+    return () => cancelAnimationFrame(id);
+  }, [messagesById, scrollToMessage]);
+
+  const jumpToMessage = useCallback(
+    async (messageId: string) => {
+      if (messagesById.has(messageId)) {
+        scrollToMessage(messageId);
+        return;
+      }
+      // Message is older than the loaded window — fetch it from the server.
+      try {
+        const res = await fetch(`/api/messages/${encodeURIComponent(messageId)}`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const fetched = data.message as Message | null;
+        if (!fetched) return;
+        pendingJumpRef.current = fetched.id;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === fetched.id)) return prev;
+          return [...prev, fetched].sort((a, b) =>
+            a.created_at.localeCompare(b.created_at)
+          );
+        });
+      } catch (e) {
+        console.error("Failed to fetch referenced message:", e);
+      }
+    },
+    [messagesById, scrollToMessage]
+  );
 
   const selectMention = (u: MentionUser) => {
     if (!mention) return;
@@ -737,11 +796,14 @@ export function FanCommunity() {
                   msg={msg}
                   isMine={msg.user_id === user.id}
                   repliedTo={messagesById.get(msg.reply_to_id ?? "") ?? null}
+                  replyToId={msg.reply_to_id ?? null}
+                  highlighted={highlightedId === msg.id}
                   disabled={reactionsDisabled}
                   toggleReaction={toggleReaction}
                   setReplyTo={setReplyTo}
                   setReactFor={setReactFor}
                   setPreview={setPreview}
+                  onJumpToReply={jumpToMessage}
                 />
               ))}
             </AnimatePresence>

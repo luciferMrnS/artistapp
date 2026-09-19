@@ -11,6 +11,7 @@ import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 import { useJumpToBottom } from "@/hooks/useJumpToBottom";
+import { useScrollToMessage } from "@/hooks/useScrollToMessage";
 import { JumpToLatest } from "@/components/ui/JumpToLatest";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
@@ -110,12 +111,15 @@ interface DmBubbleProps {
   msg: DMChat;
   mine: boolean;
   repliedTo: DMChat | null;
+  replyToId: string | null;
   repliedToLabel: string | null;
+  highlighted: boolean;
   disabled: boolean;
   toggleReaction: (messageId: string, emoji: string) => void;
   setReplyTo: (m: DMChat | null) => void;
   setReactFor: (m: DMChat | null) => void;
   setPreview: (url: string) => void;
+  onJumpToReply: (messageId: string) => void;
 }
 
 /**
@@ -126,12 +130,15 @@ function DmBubble({
   msg,
   mine,
   repliedTo,
+  replyToId,
   repliedToLabel,
+  highlighted,
   disabled,
   toggleReaction,
   setReplyTo,
   setReactFor,
   setPreview,
+  onJumpToReply,
 }: DmBubbleProps) {
   const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
   const longPress = useLongPress(() => {
@@ -141,8 +148,10 @@ function DmBubble({
 
   return (
     <motion.div
+      data-message-id={msg.id}
       className={cn(
-        "relative select-none",
+        "relative select-none rounded-xl transition-shadow",
+        highlighted && "ring-2 ring-primary shadow-[0_0_24px_rgba(29,155,240,0.35)]",
         mine ? "flex justify-end" : "flex justify-start"
       )}
       drag="x"
@@ -172,20 +181,25 @@ function DmBubble({
             : "rounded-bl-md bg-zinc-800 text-white"
         )}
       >
-        {repliedTo && (
-          <div
+        {(repliedTo || replyToId) && (
+          <button
+            type="button"
+            onClick={() => replyToId && onJumpToReply(replyToId)}
+            title="Jump to the original message"
             className={cn(
-              "mb-1 rounded-lg border-l-2 px-2 py-1",
+              "mb-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
               mine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
             )}
           >
             <p className="truncate text-[10px] font-semibold text-primary">
-              ↪ {repliedToLabel}
+              ↪ {repliedToLabel ?? "Message"}
             </p>
             <p className="truncate text-xs text-secondary">
-              {repliedTo.content || (repliedTo.media_url ? "[image]" : "…")}
+              {repliedTo
+                ? repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
+                : "Load original message"}
             </p>
-          </div>
+          </button>
         )}
 
         {msg.media_url ? (
@@ -303,11 +317,14 @@ export function DirectMessages() {
 
   const {
     setContainerRef,
+    containerRef,
     showButton: showJumpToLatest,
     jumpToBottom,
     rememberOpenScroll,
     refreshPosition,
   } = useJumpToBottom();
+
+  const { highlightedId, scrollToMessage } = useScrollToMessage(containerRef);
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
@@ -342,6 +359,30 @@ export function DirectMessages() {
       // best-effort
     }
   }, []);
+
+  const selectConversation = (convo: ConversationSummary) => {
+    setShowNewPicker(false);
+    setShowEmoji(false);
+    setReplyTo(null);
+    setReactFor(null);
+    setActive({
+      conversationId: convo.conversation_id,
+      recipient: {
+        id: convo.other_user.id,
+        username: convo.other_user.username,
+        avatar: convo.other_user.avatar,
+        role: convo.other_user.role,
+      },
+    });
+    if (convo.unread_count > 0) {
+      markRead(convo.conversation_id);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversation_id === convo.conversation_id ? { ...c, unread_count: 0 } : c
+        )
+      );
+    }
+  };
 
   // Opening the inbox clears the sidebar badge — mark everything read.
   useEffect(() => {
@@ -478,29 +519,48 @@ export function DirectMessages() {
     return refreshPosition();
   }, [active?.conversationId, messages, refreshPosition]);
 
-  const selectConversation = (convo: ConversationSummary) => {
-    setShowNewPicker(false);
-    setShowEmoji(false);
-    setReplyTo(null);
-    setReactFor(null);
-    setActive({
-      conversationId: convo.conversation_id,
-      recipient: {
-        id: convo.other_user.id,
-        username: convo.other_user.username,
-        avatar: convo.other_user.avatar,
-        role: convo.other_user.role,
-      },
-    });
-    if (convo.unread_count > 0) {
-      markRead(convo.conversation_id);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.conversation_id === convo.conversation_id ? { ...c, unread_count: 0 } : c
-        )
-      );
-    }
-  };
+  // When the user taps a reply preview whose original message isn't loaded,
+  // it is fetched and inserted; this ref holds the id until it shows up in
+  // the list, then we scroll to it.
+  const pendingJumpRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending || !messagesById.has(pending)) return;
+    pendingJumpRef.current = null;
+    const id = requestAnimationFrame(() => scrollToMessage(pending));
+    return () => cancelAnimationFrame(id);
+  }, [messagesById, scrollToMessage]);
+
+  const jumpToMessage = useCallback(
+    async (messageId: string) => {
+      if (messagesById.has(messageId)) {
+        scrollToMessage(messageId);
+        return;
+      }
+      // Message missing from the loaded conversation — fetch it by id.
+      try {
+        const res = await fetch(
+          `/api/dm/messages?message_id=${encodeURIComponent(messageId)}`,
+          { credentials: "include" }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const fetched = data.message as DMChat | null;
+        if (!fetched) return;
+        pendingJumpRef.current = fetched.id;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === fetched.id)) return prev;
+          return [...prev, fetched].sort((a, b) =>
+            a.created_at.localeCompare(b.created_at)
+          );
+        });
+      } catch (e) {
+        console.error("Failed to fetch referenced message:", e);
+      }
+    },
+    [messagesById, scrollToMessage]
+  );
 
   const openNewPicker = async () => {
     setShowNewPicker((prev) => !prev);
@@ -845,6 +905,7 @@ export function DirectMessages() {
                         msg={msg}
                         mine={mine}
                         repliedTo={repliedTo}
+                        replyToId={msg.reply_to_id ?? null}
                         repliedToLabel={
                           repliedTo
                             ? repliedTo.sender_id === user?.id
@@ -852,11 +913,13 @@ export function DirectMessages() {
                               : active.recipient.username
                             : null
                         }
+                        highlighted={highlightedId === msg.id}
                         disabled={!!user?.restricted_at}
                         toggleReaction={toggleReaction}
                         setReplyTo={setReplyTo}
                         setReactFor={setReactFor}
                         setPreview={setPreview}
+                        onJumpToReply={jumpToMessage}
                       />
                     );
                   })

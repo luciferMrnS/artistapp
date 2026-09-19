@@ -1,17 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectMessages, sendDirectMessage, isUserRestricted } from "@/lib/db";
+import {
+  getDirectMessages,
+  getDirectMessageById,
+  getDirectMessageReactionsFor,
+  sendDirectMessage,
+  isUserRestricted,
+} from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 import { sendUnreadPush } from "@/lib/push";
 
 /**
  * GET /api/dm/messages?conversation_id=...
- * Fetch messages in a conversation the user is part of
+ * Fetch messages in a conversation the user is part of.
+ * Alternatively GET /api/dm/messages?message_id=... returns a single message
+ * (used to jump back to a message that was replied to).
  */
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const messageId = req.nextUrl.searchParams.get("message_id");
+    if (messageId) {
+      const message = await getDirectMessageById(messageId);
+      if (
+        !message ||
+        (message.sender_id !== user.userId && message.recipient_id !== user.userId)
+      ) {
+        return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      }
+      const reactions = await getDirectMessageReactionsFor(
+        [message.id],
+        user.userId
+      );
+      return NextResponse.json(
+        {
+          success: true,
+          message: { ...message, reactions: reactions[message.id] ?? [] },
+        },
+        { status: 200 }
+      );
     }
 
     const conversationId = req.nextUrl.searchParams.get("conversation_id");
