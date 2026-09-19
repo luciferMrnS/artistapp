@@ -179,8 +179,40 @@ if ($fanBId -and $msg1Id) {
   Show "Non-participant cannot react (403/404)" $false ("Fan B not available")
 }
 
+# ── 10. Fan A edits own DM ───────────────────────────────────
+$editedOk = $false
+if ($replyId) {
+  $resp = Invoke-WebRequest -Uri "$base/api/dm/messages/$replyId" -Method PATCH -Body (JsonBody @{ content = "E2E: reply EDITED $stamp" }) -ContentType "application/json" -WebSession $fanASession -SkipHttpErrorCheck
+  $data = $resp.Content | ConvertFrom-Json
+  $editedOk = $resp.StatusCode -eq 200 -and $data.success -and $data.message.id -eq $replyId -and $data.message.content -match "EDITED"
+  Show "Fan A edits own DM" $editedOk ("status=$($resp.StatusCode) content=$($data.message.content) edited_at=$($data.message.edited_at) error=$($data.error)")
+} else {
+  Show "Fan A edits own DM" $false ("no replyId")
+}
+
+# ── 11. Non-owner cannot edit the artist's DM ────────────────
+$blockedEdit = $false
+if ($fanBId -and $msg1Id) {
+  $resp = Invoke-WebRequest -Uri "$base/api/dm/messages/$msg1Id" -Method PATCH -Body (JsonBody @{ content = "hax $stamp" }) -ContentType "application/json" -WebSession $fanBSession -SkipHttpErrorCheck
+  $blockedEdit = $resp.StatusCode -eq 404 -or $resp.StatusCode -eq 403
+  Show "Non-owner cannot edit DM (403/404)" $blockedEdit ("status=$($resp.StatusCode) error=$($resp.Content)")
+} else {
+  Show "Non-owner cannot edit DM (403/404)" $false ("Fan B or msg unavailable")
+}
+
+# ── 12. Fan A deletes own DM ─────────────────────────────────
+$deletedOk = $false
+if ($replyId) {
+  $resp = Invoke-WebRequest -Uri "$base/api/dm/messages/$replyId" -Method DELETE -WebSession $fanASession -SkipHttpErrorCheck
+  $data = $resp.Content | ConvertFrom-Json
+  $deletedOk = $resp.StatusCode -eq 200 -and $data.success
+  Show "Fan A deletes own DM" $deletedOk ("status=$($resp.StatusCode) success=$($data.success) message_deleted_at=$($data.message.deleted_at) error=$($data.error)")
+} else {
+  Show "Fan A deletes own DM" $false ("no replyId")
+}
+
 # ── Summary ──────────────────────────────────────────────────
 Write-Output ""
-Write-Output ("SUMMARY: 9 checks, {0} passed, {1} failed" -f (9 - $failCount), $failCount)
+Write-Output ("SUMMARY: 12 checks, {0} passed, {1} failed" -f (12 - $failCount), $failCount)
 Write-Output "FAN A EMAIL: $fanAEmail"
 exit $failCount

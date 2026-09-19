@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Loader2, MoreHorizontal, Trash2 } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 interface KebabMenuProps {
   /** Label of the delete action, e.g. "Delete post" */
@@ -10,16 +10,22 @@ interface KebabMenuProps {
   confirmLabel?: string;
   /** Resolves true when the deletion succeeded */
   onDelete: () => Promise<boolean>;
+  /** Optional edit action (shown above delete). Leave unset to hide it. */
+  editLabel?: string;
+  /** Runs when the edit action is selected */
+  onEdit?: () => void;
 }
 
 /**
- * Three-dot menu with a single two-step delete action.
- * First click arms the confirm state; second click runs `onDelete`.
+ * Three-dot menu with an optional edit action and a two-step delete action.
+ * First click on delete arms the confirm state; second click runs `onDelete`.
  */
 export function KebabMenu({
   deleteLabel,
   confirmLabel = "Confirm delete",
   onDelete,
+  editLabel = "Edit",
+  onEdit,
 }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -29,6 +35,13 @@ export function KebabMenu({
     setOpen((o) => !o);
     setConfirming(false);
     setDeleting(false);
+  };
+
+  const handleEditClick = () => {
+    setOpen(false);
+    setConfirming(false);
+    setDeleting(false);
+    onEdit?.();
   };
 
   const handleDeleteClick = async () => {
@@ -75,6 +88,17 @@ export function KebabMenu({
           role="menu"
           className="absolute right-0 top-full z-50 mt-1 min-w-[170px] rounded-xl border border-border bg-zinc-900 p-1 shadow-xl"
         >
+          {onEdit && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleEditClick}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-secondary transition-colors hover:bg-primary/10 hover:text-primary"
+            >
+              <Pencil className="h-4 w-4" />
+              {editLabel}
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

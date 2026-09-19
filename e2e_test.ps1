@@ -143,8 +143,47 @@ $anon = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $resp = Invoke-WebRequest -Uri "$base/api/posts" -Method GET -WebSession $anon -SkipHttpErrorCheck
 Show "Unauthenticated GET /api/posts -> 401" ($resp.StatusCode -eq 401) ("status=$($resp.StatusCode)")
 
+# ── 15. Artist sends a Creed message ─────────────────────────
+$creedId = $null
+$resp = Invoke-WebRequest -Uri "$base/api/messages" -Method POST -Body (JsonBody @{ content = "E2E Creed message $stamp"; messageType = "text" }) -ContentType "application/json" -WebSession $artistSession -SkipHttpErrorCheck
+$data = $resp.Content | ConvertFrom-Json
+$creedId = if ($resp.StatusCode -eq 201) { $data.message.id } else { $null }
+Show "Artist sends Creed message" ($resp.StatusCode -eq 201 -and $creedId) ("status=$($resp.StatusCode) msgId=$creedId error=$($data.error)")
+
+# ── 16. Artist edits own Creed message ───────────────────────
+$editedOk = $false
+if ($creedId) {
+  $resp = Invoke-WebRequest -Uri "$base/api/messages/$creedId" -Method PATCH -Body (JsonBody @{ content = "E2E Creed message EDITED $stamp" }) -ContentType "application/json" -WebSession $artistSession -SkipHttpErrorCheck
+  $data = $resp.Content | ConvertFrom-Json
+  $editedOk = $resp.StatusCode -eq 200 -and $data.success -and $data.message.id -eq $creedId -and $data.message.content -match "EDITED"
+  Show "Artist edits own Creed message" $editedOk ("status=$($resp.StatusCode) content=$($data.message.content) edited_at=$($data.message.edited_at) error=$($data.error)")
+} else {
+  Show "Artist edits own Creed message" $false ("no creedId")
+}
+
+# ── 17. Fan cannot edit the artist's Creed message ───────────
+$fanBlockedEdit = $false
+if ($creedId) {
+  $resp = Invoke-WebRequest -Uri "$base/api/messages/$creedId" -Method PATCH -Body (JsonBody @{ content = "hax $stamp" }) -ContentType "application/json" -WebSession $fanSession -SkipHttpErrorCheck
+  $fanBlockedEdit = $resp.StatusCode -eq 404 -or $resp.StatusCode -eq 403
+  Show "Fan cannot edit another's Creed message (403/404)" $fanBlockedEdit ("status=$($resp.StatusCode) error=$($resp.Content)")
+} else {
+  Show "Fan cannot edit another's Creed message (403/404)" $false ("no creedId")
+}
+
+# ── 18. Artist deletes own Creed message ─────────────────────
+$deletedOk = $false
+if ($creedId) {
+  $resp = Invoke-WebRequest -Uri "$base/api/messages/$creedId" -Method DELETE -WebSession $artistSession -SkipHttpErrorCheck
+  $data = $resp.Content | ConvertFrom-Json
+  $deletedOk = $resp.StatusCode -eq 200 -and $data.success
+  Show "Artist deletes own Creed message" $deletedOk ("status=$($resp.StatusCode) success=$($data.success) message_deleted_at=$($data.message.deleted_at) error=$($data.error)")
+} else {
+  Show "Artist deletes own Creed message" $false ("no creedId")
+}
+
 # ── Summary ──────────────────────────────────────────────────
 Write-Output ""
-Write-Output ("SUMMARY: " + (16 - $failCount) + "/16 passed, " + $failCount + " failed")
+Write-Output ("SUMMARY: " + (20 - $failCount) + "/20 passed, " + $failCount + " failed")
 Write-Output "FAN EMAIL: $fanEmail"
 exit $failCount

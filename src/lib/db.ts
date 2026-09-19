@@ -2795,6 +2795,8 @@ export interface DirectMessage {
   read: boolean;
   reply_to_id?: string | null;
   reactions?: MessageReaction[];
+  edited_at?: string | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -2897,6 +2899,96 @@ export async function sendDirectMessage(
 }
 
 /**
+ * Edit the text of a direct message. Only the sender can edit.
+ * Gracefully loses the `edited_at` marker if the migration hasn't been
+ * applied yet.
+ */
+export async function updateDirectMessage(
+  messageId: string,
+  userId: string,
+  content: string
+): Promise<{ success: boolean; message?: DirectMessage; error?: string }> {
+  const trimmed = content.trim();
+  if (!trimmed) return { success: false, error: "Message content is required" };
+
+  const { data, error } = await supabaseAdmin
+    .from("direct_messages")
+    .update({ content: trimmed, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .eq("sender_id", userId)
+    .select()
+    .single();
+
+  // edited_at column comes from migration_chat_edit_delete.sql — if it
+  // isn't applied yet, fall back to updating only the content.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    const retry = await supabaseAdmin
+      .from("direct_messages")
+      .update({ content: trimmed })
+      .eq("id", messageId)
+      .eq("sender_id", userId)
+      .select()
+      .single();
+    if (retry.error) {
+      console.error("Error updating DM:", retry.error);
+      return { success: false, error: retry.error.message || "Failed to edit message" };
+    }
+    return { success: true, message: retry.data as DirectMessage };
+  }
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { success: false, error: "Message not found" };
+    }
+    console.error("Error updating DM:", error);
+    return { success: false, error: error.message || "Failed to edit message" };
+  }
+
+  return { success: true, message: data as DirectMessage };
+}
+
+/**
+ * Soft-delete a direct message (sender only). Sets `deleted_at` and
+ * blanks the content. Falls back to a hard delete if the migration
+ * hasn't been applied yet.
+ */
+export async function deleteDirectMessage(
+  messageId: string,
+  userId: string
+): Promise<{ success: boolean; message?: DirectMessage; error?: string }> {
+  const { data, error } = await supabaseAdmin
+    .from("direct_messages")
+    .update({ deleted_at: new Date().toISOString(), content: "" })
+    .eq("id", messageId)
+    .eq("sender_id", userId)
+    .select()
+    .single();
+
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    const retry = await supabaseAdmin
+      .from("direct_messages")
+      .delete()
+      .eq("id", messageId)
+      .eq("sender_id", userId);
+    if (retry.error) {
+      console.error("Error deleting DM:", retry.error);
+      return { success: false, error: retry.error.message || "Failed to delete message" };
+    }
+    return { success: true };
+  }
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { success: false, error: "Message not found" };
+    }
+    console.error("Error deleting DM:", error);
+    return { success: false, error: error.message || "Failed to delete message" };
+  }
+
+  return { success: true, message: data as DirectMessage };
+}
+
+/**
  * List the user's conversations (latest message per conversation,
  * with the other participant's profile and unread count)
  */
@@ -2960,7 +3052,11 @@ export async function getConversations(
           avatar: other?.avatar ?? "/default-avatar.png",
           role: (other?.role as UserRole) ?? "fan",
         },
-        last_message: msg.media_url ? "[image]" : msg.content,
+        last_message: msg.deleted_at
+          ? "Message deleted"
+          : msg.media_url
+            ? "[image]"
+            : msg.content,
         last_message_at: msg.created_at,
         last_sender_id: msg.sender_id,
         unread_count: unreadByConversation[msg.conversation_id] ?? 0,
@@ -3234,6 +3330,8 @@ export interface Message {
   media_url: string | null;
   reply_to_id?: string | null;
   reactions?: MessageReaction[];
+  edited_at?: string | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -3401,6 +3499,96 @@ export async function createMessage(
   }
 
   return data as Message;
+}
+
+/**
+ * Edit the text of a community message. Only the author can edit.
+ * Gracefully loses the `edited_at` marker if the migration hasn't been
+ * applied yet.
+ */
+export async function updateMessage(
+  messageId: string,
+  userId: string,
+  content: string
+): Promise<{ success: boolean; message?: Message; error?: string }> {
+  const trimmed = content.trim();
+  if (!trimmed) return { success: false, error: "Message content is required" };
+
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .update({ content: trimmed, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  // edited_at column comes from migration_chat_edit_delete.sql — if it
+  // isn't applied yet, fall back to updating only the content.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    const retry = await supabaseAdmin
+      .from("messages")
+      .update({ content: trimmed })
+      .eq("id", messageId)
+      .eq("user_id", userId)
+      .select()
+      .single();
+    if (retry.error) {
+      console.error("Error updating message:", retry.error);
+      return { success: false, error: retry.error.message || "Failed to edit message" };
+    }
+    return { success: true, message: retry.data as Message };
+  }
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { success: false, error: "Message not found" };
+    }
+    console.error("Error updating message:", error);
+    return { success: false, error: error.message || "Failed to edit message" };
+  }
+
+  return { success: true, message: data as Message };
+}
+
+/**
+ * Soft-delete a community message (author only). Sets `deleted_at` and
+ * blanks the content. Falls back to a hard delete if the migration
+ * hasn't been applied yet.
+ */
+export async function deleteMessage(
+  messageId: string,
+  userId: string
+): Promise<{ success: boolean; message?: Message; error?: string }> {
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .update({ deleted_at: new Date().toISOString(), content: "" })
+    .eq("id", messageId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    const retry = await supabaseAdmin
+      .from("messages")
+      .delete()
+      .eq("id", messageId)
+      .eq("user_id", userId);
+    if (retry.error) {
+      console.error("Error deleting message:", retry.error);
+      return { success: false, error: retry.error.message || "Failed to delete message" };
+    }
+    return { success: true };
+  }
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { success: false, error: "Message not found" };
+    }
+    console.error("Error deleting message:", error);
+    return { success: false, error: error.message || "Failed to delete message" };
+  }
+
+  return { success: true, message: data as Message };
 }
 
 /**

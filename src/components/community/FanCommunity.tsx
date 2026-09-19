@@ -2,11 +2,12 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Smile, Image as ImageIcon, Loader2, MessageCircle, Reply, X, Megaphone } from "lucide-react";
+import { Check, Pencil, Send, Smile, Image as ImageIcon, Loader2, MessageCircle, Reply, X, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
+import { KebabMenu } from "@/components/ui/KebabMenu";
 import { Lightbox } from "@/components/ui/Lightbox";
 import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
@@ -37,6 +38,8 @@ interface Message {
   media_url: string | null;
   reply_to_id?: string | null;
   reactions?: MessageReaction[];
+  edited_at?: string | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -153,11 +156,14 @@ interface MessageRowProps {
   setReactFor: (m: Message | null) => void;
   setPreview: (url: string) => void;
   onJumpToReply: (messageId: string) => void;
+  onEdit: (msg: Message) => void;
+  onDeleteMessage: (msg: Message) => Promise<boolean>;
 }
 
 /**
  * A single message bubble with swipe-to-reply (left), swipe-to-react (right)
- * and long-press-to-react gestures.
+ * and long-press-to-react gestures. Own messages get a kebab menu with
+ * edit/delete actions; deleted messages collapse to a placeholder.
  */
 function MessageRow({
   msg,
@@ -171,12 +177,16 @@ function MessageRow({
   setReactFor,
   setPreview,
   onJumpToReply,
+  onEdit,
+  onDeleteMessage,
 }: MessageRowProps) {
   const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
   const longPress = useLongPress(() => {
     if (!disabled) setReactFor(msg);
   });
   const reactions = msg.reactions ?? [];
+  const deleted = !!msg.deleted_at;
+  const editable = isMine && !deleted && msg.message_type === "text";
 
   return (
     <motion.div
@@ -235,72 +245,90 @@ function MessageRow({
           </UserDmLink>
         </p>
 
-        {(repliedTo || replyToId) && (
-          <button
-            type="button"
-            onClick={() => replyToId && onJumpToReply(replyToId)}
-            title="Jump to the original message"
-            className={cn(
-              "mt-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
-              isMine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
-            )}
-          >
-            <p className="truncate text-[10px] font-semibold text-primary">
-              ↪ {repliedTo ? repliedTo.username : "Message"}
-            </p>
-            <p className="truncate text-xs text-secondary">
-              {repliedTo
-                ? repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
-                : "Load original message"}
-            </p>
-          </button>
-        )}
-
-        <div className="mt-0.5 text-sm">
-          {msg.message_type === "gif" || msg.message_type === "image" ? (
-            <button
-              type="button"
-              onClick={() => setPreview(msg.media_url!)}
-              aria-label="Open image full screen"
-              className="block cursor-zoom-in"
-            >
-              <img
-                src={msg.media_url!}
-                alt=""
-                className="max-w-[250px] rounded-lg"
-                loading="lazy"
-              />
-            </button>
-          ) : (
-            <span className="break-words">{renderMentionContent(msg.content)}</span>
-          )}
-        </div>
-
-        {reactions.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {reactions.map((r) => (
+        {deleted ? (
+          <p className="mt-1 text-xs italic text-white/60">Message deleted</p>
+        ) : (
+          <>
+            {(repliedTo || replyToId) && (
               <button
-                key={r.emoji}
                 type="button"
-                onClick={() => toggleReaction(msg.id, r.emoji)}
+                onClick={() => replyToId && onJumpToReply(replyToId)}
+                title="Jump to the original message"
                 className={cn(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
-                  r.me
-                    ? "border-primary bg-primary/30 text-white"
-                    : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                  "mt-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
+                  isMine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
                 )}
               >
-                <span>{r.emoji}</span>
-                <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+                <p className="truncate text-[10px] font-semibold text-primary">
+                  ↪ {repliedTo ? repliedTo.username : "Message"}
+                </p>
+                <p className="truncate text-xs text-secondary">
+                  {repliedTo
+                    ? repliedTo.deleted_at
+                      ? "Message deleted"
+                      : repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
+                    : "Load original message"}
+                </p>
               </button>
-            ))}
-          </div>
+            )}
+
+            <div className="mt-0.5 text-sm">
+              {msg.message_type === "gif" || msg.message_type === "image" ? (
+                <button
+                  type="button"
+                  onClick={() => setPreview(msg.media_url!)}
+                  aria-label="Open image full screen"
+                  className="block cursor-zoom-in"
+                >
+                  <img
+                    src={msg.media_url!}
+                    alt=""
+                    className="max-w-[250px] rounded-lg"
+                    loading="lazy"
+                  />
+                </button>
+              ) : (
+                <span className="break-words">{renderMentionContent(msg.content)}</span>
+              )}
+            </div>
+
+            {reactions.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {reactions.map((r) => (
+                  <button
+                    key={r.emoji}
+                    type="button"
+                    onClick={() => toggleReaction(msg.id, r.emoji)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
+                      r.me
+                        ? "border-primary bg-primary/30 text-white"
+                        : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                    )}
+                  >
+                    <span>{r.emoji}</span>
+                    <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <p className={cn("mt-1 text-[10px]", isMine ? "text-white/60" : "text-secondary")}>
           {formatTime(msg.created_at)}
+          {msg.edited_at && <span className="ml-1 italic opacity-70">(edited)</span>}
         </p>
       </div>
+
+      {isMine && !deleted && !disabled && (
+        <KebabMenu
+          deleteLabel="Delete message"
+          onDelete={() => onDeleteMessage(msg)}
+          editLabel={editable ? "Edit message" : undefined}
+          onEdit={editable ? () => onEdit(msg) : undefined}
+        />
+      )}
 
       {/* Drag feedback hint */}
       <AnimatePresence>
@@ -339,6 +367,7 @@ export function FanCommunity() {
   const [preview, setPreview] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [reactFor, setReactFor] = useState<Message | null>(null);
+  const [editingMsg, setEditingMsg] = useState<Message | null>(null);
 
   const [announcement, setAnnouncement] = useState<AnnouncementData | null>(null);
   const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState<string | null>(null);
@@ -598,16 +627,45 @@ export function FanCommunity() {
     }
     setMention(null);
     const content = input.trim();
-    const replyId = replyTo?.id ?? null;
-    setInput("");
+    if (!content) return;
     setShowEmoji(false);
     setIsSending(true);
 
-    // Additional validation to ensure content is meaningful
-    if (!content || content.trim() === "") {
-      setIsSending(false);
+    // Editing an existing message instead of sending a new one.
+    if (editingMsg) {
+      try {
+        const res = await fetch(`/api/messages/${encodeURIComponent(editingMsg.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          console.warn(data?.error || "Failed to edit message");
+          return;
+        }
+        const updated = data?.message as Message | null;
+        if (updated) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === editingMsg.id ? updated : m))
+          );
+        } else {
+          await fetchMessages();
+        }
+        setEditingMsg(null);
+        setInput("");
+        jumpToBottom();
+      } catch (e) {
+        console.error("Failed to edit message:", e);
+      } finally {
+        setIsSending(false);
+      }
       return;
     }
+
+    const replyId = replyTo?.id ?? null;
+    setInput("");
 
     try {
       const res = await fetch("/api/messages", {
@@ -701,6 +759,50 @@ export function FanCommunity() {
     },
     [user]
   );
+
+  const startEdit = (msg: Message) => {
+    setEditingMsg(msg);
+    setInput(msg.content);
+    setReplyTo(null);
+    setMention(null);
+    setShowEmoji(false);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(msg.content.length, msg.content.length);
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingMsg(null);
+    setInput("");
+  };
+
+  const deleteMessageRow = async (msg: Message): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/messages/${encodeURIComponent(msg.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.warn(data?.error ?? "Failed to delete message");
+        return false;
+      }
+      const data = await res.json();
+      const updated = data?.message as Message | null;
+      if (updated) {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? updated : m)));
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      }
+      if (replyTo?.id === msg.id) setReplyTo(null);
+      if (editingMsg?.id === msg.id) cancelEdit();
+      return true;
+    } catch (e) {
+      console.error("Failed to delete message:", e);
+      return false;
+    }
+  };
 
   if (!user) {
     return (
@@ -798,12 +900,14 @@ export function FanCommunity() {
                   repliedTo={messagesById.get(msg.reply_to_id ?? "") ?? null}
                   replyToId={msg.reply_to_id ?? null}
                   highlighted={highlightedId === msg.id}
-                  disabled={reactionsDisabled}
+                  disabled={reactionsDisabled || !!msg.deleted_at}
                   toggleReaction={toggleReaction}
                   setReplyTo={setReplyTo}
                   setReactFor={setReactFor}
                   setPreview={setPreview}
                   onJumpToReply={jumpToMessage}
+                  onEdit={startEdit}
+                  onDeleteMessage={deleteMessageRow}
                 />
               ))}
             </AnimatePresence>
@@ -895,6 +999,33 @@ export function FanCommunity() {
                 onClick={() => setReplyTo(null)}
                 className="rounded-full p-1 text-secondary transition hover:bg-white/10"
                 aria-label="Cancel reply"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Edit-message bar — replaces reply-to bar while editing */}
+        <AnimatePresence>
+          {editingMsg && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              className="mb-2 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2"
+            >
+              <Pencil className="h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold text-primary">
+                  Editing message
+                </p>
+                <p className="truncate text-xs text-secondary">{editingMsg.content || ""}</p>
+              </div>
+              <button
+                onClick={cancelEdit}
+                className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                aria-label="Cancel editing"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -995,12 +1126,12 @@ export function FanCommunity() {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
-                placeholder={replyTo ? "Reply…" : "Say something..."}
+                placeholder={editingMsg ? "Edit message…" : replyTo ? "Reply…" : "Say something..."}
                 className="flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <button onClick={sendMessage} disabled={!input.trim() || isSending}
                 className="rounded-full bg-primary p-2 text-white transition hover:opacity-80 disabled:opacity-50">
-                {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : editingMsg ? <Check className="h-5 w-5" /> : <Send className="h-5 w-5" />}
               </button>
             </>
           )}

@@ -1,57 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getMessageById,
-  getMessageReactionsFor,
-  deleteMessage,
+  deleteDirectMessage,
   isUserRestricted,
-  resolveCommunityMediaUrl,
-  updateMessage,
+  updateDirectMessage,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 
 /**
- * GET /api/messages/[id]
- * Fetch a single Creed (community chat) message. Used to jump back to a
- * message that was replied to but is outside the loaded recent window.
- */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    const { id } = await params;
-
-    const message = await getMessageById(id);
-    if (!message) {
-      return NextResponse.json({ error: "Message not found" }, { status: 404 });
-    }
-
-    const reactions = await getMessageReactionsFor([id], user?.userId ?? null);
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: {
-          ...message,
-          media_url: resolveCommunityMediaUrl(message.media_url),
-          reactions: reactions[id] ?? [],
-        },
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error fetching message:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch message" },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * PATCH /api/messages/[id]
- * Edit the text of your own community message.
+ * PATCH /api/dm/messages/[id]
+ * Edit the text of your own direct message.
  * Body: { content }
  */
 export async function PATCH(
@@ -85,7 +42,7 @@ export async function PATCH(
       );
     }
 
-    const result = await updateMessage(id, user.userId, content);
+    const result = await updateDirectMessage(id, user.userId, content);
     if (!result.success) {
       const status = result.error === "Message not found" ? 404 : 400;
       return NextResponse.json({ error: result.error }, { status });
@@ -96,7 +53,7 @@ export async function PATCH(
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error updating message:", error);
+    console.error("Error updating DM:", error);
     return NextResponse.json(
       { error: "Failed to edit message" },
       { status: 500 }
@@ -105,8 +62,8 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/messages/[id]
- * Soft-delete your own community message (falls back to a hard delete
+ * DELETE /api/dm/messages/[id]
+ * Soft-delete your own direct message (falls back to a hard delete
  * if the migration hasn't been applied yet).
  */
 export async function DELETE(
@@ -126,7 +83,7 @@ export async function DELETE(
     }
     const { id } = await params;
 
-    const result = await deleteMessage(id, user.userId);
+    const result = await deleteDirectMessage(id, user.userId);
     if (!result.success) {
       const status = result.error === "Message not found" ? 404 : 400;
       return NextResponse.json({ error: result.error }, { status });
@@ -137,7 +94,7 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error deleting message:", error);
+    console.error("Error deleting DM:", error);
     return NextResponse.json(
       { error: "Failed to delete message" },
       { status: 500 }

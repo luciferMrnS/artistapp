@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X, Image as ImageIcon } from "lucide-react";
+import { Send, Plus, Check, Pencil, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -16,6 +16,7 @@ import { JumpToLatest } from "@/components/ui/JumpToLatest";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { Lightbox } from "@/components/ui/Lightbox";
+import { KebabMenu } from "@/components/ui/KebabMenu";
 
 interface MessageReaction {
   emoji: string;
@@ -33,6 +34,8 @@ interface DMChat {
   read: boolean;
   reply_to_id?: string | null;
   reactions?: MessageReaction[];
+  edited_at?: string | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -120,6 +123,8 @@ interface DmBubbleProps {
   setReactFor: (m: DMChat | null) => void;
   setPreview: (url: string) => void;
   onJumpToReply: (messageId: string) => void;
+  onEdit: (msg: DMChat) => void;
+  onDeleteMessage: (msg: DMChat) => Promise<boolean>;
 }
 
 /**
@@ -139,12 +144,16 @@ function DmBubble({
   setReactFor,
   setPreview,
   onJumpToReply,
+  onEdit,
+  onDeleteMessage,
 }: DmBubbleProps) {
   const [dragDir, setDragDir] = useState<"reply" | "react" | null>(null);
   const longPress = useLongPress(() => {
     if (!disabled) setReactFor(msg);
   });
   const reactions = msg.reactions ?? [];
+  const deleted = !!msg.deleted_at;
+  const editable = mine && !deleted && !msg.media_url;
 
   return (
     <motion.div
@@ -181,62 +190,71 @@ function DmBubble({
             : "rounded-bl-md bg-zinc-800 text-white"
         )}
       >
-        {(repliedTo || replyToId) && (
-          <button
-            type="button"
-            onClick={() => replyToId && onJumpToReply(replyToId)}
-            title="Jump to the original message"
-            className={cn(
-              "mb-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
-              mine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
-            )}
-          >
-            <p className="truncate text-[10px] font-semibold text-primary">
-              ↪ {repliedToLabel ?? "Message"}
-            </p>
-            <p className="truncate text-xs text-secondary">
-              {repliedTo
-                ? repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
-                : "Load original message"}
-            </p>
-          </button>
-        )}
-
-        {msg.media_url ? (
-          <button
-            type="button"
-            onClick={() => setPreview(msg.media_url!)}
-            aria-label="Open image full screen"
-            className="mb-1 block cursor-zoom-in"
-          >
-            <img
-              src={msg.media_url}
-              alt=""
-              className="max-h-52 rounded-lg object-cover"
-            />
-          </button>
-        ) : null}
-        <span className="break-words">{msg.content}</span>
-
-        {reactions.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {reactions.map((r) => (
+        {deleted ? (
+          <p className="text-xs italic text-white/60">Message deleted</p>
+        ) : (
+          <>
+            {(repliedTo || replyToId) && (
               <button
-                key={r.emoji}
                 type="button"
-                onClick={() => toggleReaction(msg.id, r.emoji)}
+                onClick={() => replyToId && onJumpToReply(replyToId)}
+                title="Jump to the original message"
                 className={cn(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
-                  r.me
-                    ? "border-primary bg-primary/30 text-white"
-                    : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                  "mb-1 block w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left transition hover:bg-white/15",
+                  mine ? "border-white/40 bg-white/10" : "border-primary/40 bg-black/20"
                 )}
               >
-                <span>{r.emoji}</span>
-                <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+                <p className="truncate text-[10px] font-semibold text-primary">
+                  ↪ {repliedToLabel ?? "Message"}
+                </p>
+                <p className="truncate text-xs text-secondary">
+                  {repliedTo
+                    ? repliedTo.deleted_at
+                      ? "Message deleted"
+                      : repliedTo.content || (repliedTo.media_url ? "[image]" : "…")
+                    : "Load original message"}
+                </p>
               </button>
-            ))}
-          </div>
+            )}
+
+            {msg.media_url ? (
+              <button
+                type="button"
+                onClick={() => setPreview(msg.media_url!)}
+                aria-label="Open image full screen"
+                className="mb-1 block cursor-zoom-in"
+              >
+                <img
+                  src={msg.media_url}
+                  alt=""
+                  className="max-h-52 rounded-lg object-cover"
+                />
+              </button>
+            ) : null}
+
+            <span className="break-words">{msg.content}</span>
+
+            {reactions.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {reactions.map((r) => (
+                  <button
+                    key={r.emoji}
+                    type="button"
+                    onClick={() => toggleReaction(msg.id, r.emoji)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
+                      r.me
+                        ? "border-primary bg-primary/30 text-white"
+                        : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                    )}
+                  >
+                    <span>{r.emoji}</span>
+                    <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <p
@@ -246,8 +264,18 @@ function DmBubble({
           )}
         >
           {formatTime(msg.created_at)}
+          {msg.edited_at && <span className="ml-1 italic opacity-70">(edited)</span>}
         </p>
       </div>
+
+      {mine && !deleted && !disabled && (
+        <KebabMenu
+          deleteLabel="Delete message"
+          onDelete={() => onDeleteMessage(msg)}
+          editLabel={editable ? "Edit message" : undefined}
+          onEdit={editable ? () => onEdit(msg) : undefined}
+        />
+      )}
 
       {/* Drag feedback hint */}
       <AnimatePresence>
@@ -310,9 +338,11 @@ export function DirectMessages() {
   const [convoError, setConvoError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DMChat | null>(null);
   const [reactFor, setReactFor] = useState<DMChat | null>(null);
+  const [editingMsg, setEditingMsg] = useState<DMChat | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
 
   const {
@@ -602,6 +632,39 @@ export function DirectMessages() {
     if (!recipientId || (!content && sending)) return;
     if (!content) return;
 
+    // Editing an existing message instead of sending a new one.
+    if (editingMsg) {
+      setSending(true);
+      setConvoError(null);
+      try {
+        const res = await fetch(`/api/dm/messages/${encodeURIComponent(editingMsg.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          setConvoError(data?.error || "Could not edit message");
+          return;
+        }
+        const updated = data?.message as DMChat | null;
+        if (updated) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === editingMsg.id ? updated : m))
+          );
+        }
+        setEditingMsg(null);
+        setInput("");
+        fetchConversations();
+        jumpToBottom();
+      } catch {
+        setConvoError("Could not edit message");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     const replyId = replyTo?.id ?? null;
     setSending(true);
     setConvoError(null);
@@ -720,6 +783,50 @@ export function DirectMessages() {
     },
     [user]
   );
+
+  const startEdit = (msg: DMChat) => {
+    setEditingMsg(msg);
+    setInput(msg.content);
+    setReplyTo(null);
+    setReactFor(null);
+    setShowEmoji(false);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(msg.content.length, msg.content.length);
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingMsg(null);
+    setInput("");
+  };
+
+  const deleteMessageRow = async (msg: DMChat): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/dm/messages/${encodeURIComponent(msg.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.warn(data?.error ?? "Failed to delete message");
+        return false;
+      }
+      const data = await res.json();
+      const updated = data?.message as DMChat | null;
+      if (updated) {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? updated : m)));
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      }
+      if (replyTo?.id === msg.id) setReplyTo(null);
+      if (editingMsg?.id === msg.id) cancelEdit();
+      fetchConversations();
+      return true;
+    } catch (e) {
+      console.error("Failed to delete message:", e);
+      return false;
+    }
+  };
 
   const filteredUsers = userOptions.filter((u) =>
     u.username.toLowerCase().includes(searchTerm.trim().toLowerCase())
@@ -914,12 +1021,14 @@ export function DirectMessages() {
                             : null
                         }
                         highlighted={highlightedId === msg.id}
-                        disabled={!!user?.restricted_at}
+                        disabled={!!user?.restricted_at || !!msg.deleted_at}
                         toggleReaction={toggleReaction}
                         setReplyTo={setReplyTo}
                         setReactFor={setReactFor}
                         setPreview={setPreview}
                         onJumpToReply={jumpToMessage}
+                        onEdit={startEdit}
+                        onDeleteMessage={deleteMessageRow}
                       />
                     );
                   })
@@ -1014,6 +1123,33 @@ export function DirectMessages() {
                     )}
                   </AnimatePresence>
                   <AnimatePresence>
+                    {editingMsg && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        className="mb-2 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2"
+                      >
+                        <Pencil className="h-4 w-4 shrink-0 text-primary" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold text-primary">
+                            Editing message
+                          </p>
+                          <p className="truncate text-xs text-secondary">
+                            {editingMsg.content || ""}
+                          </p>
+                        </div>
+                        <button
+                          onClick={cancelEdit}
+                          className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                          aria-label="Cancel editing"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <AnimatePresence>
                     {showEmoji && (
                       <motion.div
                         ref={emojiPanelRef}
@@ -1077,13 +1213,14 @@ export function DirectMessages() {
                           className="hidden"
                         />
                         <input
+                          ref={inputRef}
                           value={input}
                           onChange={(e) => {
                             setInput(e.target.value);
                             if (convoError) setConvoError(null);
                             if (uploadError) setUploadError("");
                           }}
-                          placeholder={replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
+                          placeholder={editingMsg ? "Edit message…" : replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
                           className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
                         />
                         <button
@@ -1093,6 +1230,8 @@ export function DirectMessages() {
                         >
                           {sending ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : editingMsg ? (
+                            <Check className="h-5 w-5" />
                           ) : (
                             <Send className="h-5 w-5" />
                           )}
