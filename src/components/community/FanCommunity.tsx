@@ -288,7 +288,7 @@ function MessageRow({
                   />
                 </button>
               ) : (
-                <span className="break-words">{renderMentionContent(msg.content)}</span>
+                <span className="whitespace-pre-wrap break-words">{renderMentionContent(msg.content)}</span>
               )}
             </div>
 

@@ -107,7 +107,7 @@ export function Post({
 
       {/* Content text */}
       <div className="px-4 mb-3">
-        <p className="text-[15px] leading-normal">{content}</p>
+        <p className="text-[15px] leading-normal whitespace-pre-wrap break-words">{content}</p>
       </div>
 
       {/* Media */}

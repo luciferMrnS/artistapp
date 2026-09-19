@@ -153,7 +153,7 @@ export function CommentSection({
                       })}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm">{comment.content}</p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap break-words">{comment.content}</p>
                 </div>
               </div>
             ))

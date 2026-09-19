@@ -232,7 +232,7 @@ function DmBubble({
               </button>
             ) : null}
 
-            <span className="break-words">{msg.content}</span>
+            <span className="whitespace-pre-wrap break-words">{msg.content}</span>
 
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">

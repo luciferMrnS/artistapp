@@ -264,7 +264,7 @@ export function PostPerformance({ posts }: { posts: PostRow[] }) {
                                     {formatTimeDifference(comment.created_at)}
                                   </span>
                                 </div>
-                                <p className="mt-1.5 break-words pl-8 text-xs leading-relaxed text-secondary">
+                                <p className="mt-1.5 whitespace-pre-wrap break-words pl-8 text-xs leading-relaxed text-secondary">
                                   {comment.content}
                                 </p>
                               </li>
