@@ -343,7 +343,7 @@ export function DirectMessages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeConversationIdRef = useRef<string | null>(null);
 
   const {
@@ -1213,16 +1213,20 @@ export function DirectMessages() {
                           onChange={handleImageUpload}
                           className="hidden"
                         />
-                        <input
+                        <textarea
                           ref={inputRef}
+                          rows={1}
                           value={input}
                           onChange={(e) => {
                             setInput(e.target.value);
                             if (convoError) setConvoError(null);
                             if (uploadError) setUploadError("");
+                            const el = e.target;
+                            el.style.height = "auto";
+                            el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
                           }}
                           placeholder={editingMsg ? "Edit message…" : replyTo ? "Reply…" : `Message ${active.recipient.username}...`}
-                          className="flex-1 rounded-full border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
+                          className="max-h-40 flex-1 resize-none overflow-y-auto rounded-xl border border-border bg-zinc-900 px-4 py-2.5 text-sm outline-none transition focus:border-primary/50"
                         />
                         <button
                           type="submit"

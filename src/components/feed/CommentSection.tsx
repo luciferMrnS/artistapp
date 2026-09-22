@@ -192,18 +192,18 @@ export function CommentSection({
                   >
                     <Smile className="h-5 w-5" />
                   </button>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={1}
                     placeholder="Comment as a fan…"
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !isSubmitting) {
-                        submitComment();
-                      }
+                    onChange={(e) => {
+                      setInputValue(e.target.value);
+                      const el = e.target;
+                      el.style.height = "auto";
+                      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
                     }}
                     disabled={isSubmitting}
-                    className="w-full rounded-full bg-zinc-900 border border-border px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                    className="max-h-40 w-full resize-none overflow-y-auto rounded-xl bg-zinc-900 border border-border px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
                   />
                 </div>
               </div>

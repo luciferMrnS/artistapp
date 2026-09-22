@@ -380,7 +380,7 @@ export function FanCommunity() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiToggleRef = useRef<HTMLButtonElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const mentionPanelRef = useRef<HTMLDivElement>(null);
   const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
   const [mention, setMention] = useState<ActiveMention | null>(null);
@@ -581,15 +581,18 @@ export function FanCommunity() {
     });
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const caret = e.target.selectionStart ?? value.length;
     setInput(value);
     setMention(detectMention(value, caret));
     setMentionIndex(0);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (mention && mentionMatches.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -613,10 +616,6 @@ export function FanCommunity() {
         setMention(null);
         return;
       }
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      sendMessage();
     }
   };
 
@@ -1121,14 +1120,14 @@ export function FanCommunity() {
                   <Megaphone className="h-5 w-5" />
                 </button>
               )}
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
                 placeholder={editingMsg ? "Edit message…" : replyTo ? "Reply…" : "Say something..."}
-                className="flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="max-h-40 flex-1 resize-none overflow-y-auto rounded-xl bg-white/10 px-4 py-2 text-sm text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <button onClick={sendMessage} disabled={!input.trim() || isSending}
                 className="rounded-full bg-primary p-2 text-white transition hover:opacity-80 disabled:opacity-50">
