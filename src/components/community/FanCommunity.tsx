@@ -97,15 +97,26 @@ function detectMention(
  */
 function renderMentionContent(content: string) {
   const parts = content.split(/(@[\w.]+)/g);
-  return parts.map((part, i) =>
-    /^@[\w.]+$/.test(part) ? (
-      <span key={i} className="font-semibold text-red-500">
-        {part}
-      </span>
-    ) : (
-      <React.Fragment key={i}>{part}</React.Fragment>
-    )
-  );
+  return parts.map((part, i) => {
+    if (/^@[\w.]+$/i.test(part)) {
+      if (part.toLowerCase() === "@all") {
+        return (
+          <span
+            key={i}
+            className="rounded-md bg-red-500/20 px-1.5 py-0.5 font-bold text-red-400 ring-1 ring-red-500/50"
+          >
+            {part}
+          </span>
+        );
+      }
+      return (
+        <span key={i} className="font-semibold text-red-500">
+          {part}
+        </span>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
 }
 
 /** Fire `onLongPress` when a pointer is held still for `ms`. */
@@ -581,6 +592,29 @@ export function FanCommunity() {
     });
   };
 
+  // The "@all" (mention everyone) option is offered whenever the user starts
+  // typing "@", "@a…", "@al…" or "@all" — any prefix of "all".
+  const mentionAllShown =
+    mention !== null &&
+    (mention.query === "" || "all".startsWith(mention.query.toLowerCase()));
+  const mentionOptionCount = mentionAllShown
+    ? mentionMatches.length + 1
+    : mentionMatches.length;
+
+  const selectMentionAll = () => {
+    if (!mention) return;
+    const token = "@all";
+    const next =
+      input.slice(0, mention.start) + " " + token + " " + input.slice(mention.end);
+    const caret = mention.start + (" " + token + " ").length;
+    setInput(next);
+    setMention(null);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(caret, caret);
+    });
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const caret = e.target.selectionStart ?? value.length;
@@ -593,22 +627,28 @@ export function FanCommunity() {
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mention && mentionMatches.length > 0) {
+    if (mention && mentionOptionCount > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        setMentionIndex((i) => (i + 1) % mentionOptionCount);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setMentionIndex(
-          (i) => (i - 1 + mentionMatches.length) % mentionMatches.length
+          (i) => (i - 1 + mentionOptionCount) % mentionOptionCount
         );
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        selectMention(mentionMatches[mentionIndex]);
+        if (mentionAllShown && mentionIndex === 0) {
+          selectMentionAll();
+        } else {
+          selectMention(
+            mentionMatches[mentionIndex - (mentionAllShown ? 1 : 0)]
+          );
+        }
         return;
       }
       if (e.key === "Escape") {
@@ -1043,46 +1083,77 @@ export function FanCommunity() {
               exit={{ opacity: 0, y: 8 }}
               className="absolute bottom-full left-3 right-3 z-30 mb-2 overflow-hidden rounded-xl border border-border bg-zinc-800 shadow-2xl"
             >
-              {mentionMatches.length === 0 ? (
+              {mentionAllShown || mentionMatches.length > 0 ? (
+                <ul className="max-h-64 overflow-y-auto">
+                  {mentionAllShown && (
+                    <li key="@all">
+                      <button
+                        type="button"
+                        onMouseEnter={() => setMentionIndex(0)}
+                        onClick={selectMentionAll}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-3 py-2 text-left transition",
+                          mentionIndex === 0 ? "bg-white/10" : "hover:bg-white/5"
+                        )}
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-orange-500 text-[10px] font-bold text-white">
+                          ALL
+                        </div>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          @all
+                        </span>
+                        <span className="shrink-0 text-xs text-secondary">
+                          Mention everyone
+                        </span>
+                      </button>
+                    </li>
+                  )}
+                  {mentionMatches.map((u, i) => {
+                    const index = mentionAllShown ? i + 1 : i;
+                    return (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setMentionIndex(index)}
+                          onClick={() => selectMention(u)}
+                          className={cn(
+                            "flex w-full items-center gap-3 px-3 py-2 text-left transition",
+                            index === mentionIndex ? "bg-white/10" : "hover:bg-white/5"
+                          )}
+                        >
+                          {u.avatar ? (
+                            <img
+                              src={resolveAvatarUrl(u.avatar)}
+                              alt={u.username}
+                              className="h-8 w-8 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-purple-500 text-[10px] font-bold text-white">
+                              {u.username.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                            @{u.username}
+                          </span>
+                          {u.role === "artist" && (
+                            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                              Artist
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {mentionMatches.length === 0 && (
+                    <li className="px-4 py-3 text-xs text-secondary">
+                      No users match “{mention.query}”
+                    </li>
+                  )}
+                </ul>
+              ) : (
                 <p className="px-4 py-3 text-xs text-secondary">
                   No users match “{mention.query}”
                 </p>
-              ) : (
-                <ul className="max-h-64 overflow-y-auto">
-                  {mentionMatches.map((u, i) => (
-                    <li key={u.id}>
-                      <button
-                        type="button"
-                        onMouseEnter={() => setMentionIndex(i)}
-                        onClick={() => selectMention(u)}
-                        className={cn(
-                          "flex w-full items-center gap-3 px-3 py-2 text-left transition",
-                          i === mentionIndex ? "bg-white/10" : "hover:bg-white/5"
-                        )}
-                      >
-                        {u.avatar ? (
-                          <img
-                            src={resolveAvatarUrl(u.avatar)}
-                            alt={u.username}
-                            className="h-8 w-8 shrink-0 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-purple-500 text-[10px] font-bold text-white">
-                            {u.username.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                          @{u.username}
-                        </span>
-                        {u.role === "artist" && (
-                          <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                            Artist
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
               )}
             </motion.div>
           )}
