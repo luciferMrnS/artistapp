@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createMessage,
+  createMentionNotifications,
   getMessageById,
   getRecentMessages,
   findUserById,
@@ -53,6 +54,30 @@ export async function POST(req: NextRequest) {
     Promise.resolve()
       .then(() => sendCreedPushToEveryone({ exceptUserId: user.userId }))
       .catch((err) => console.error("Creed push failed:", err));
+
+    // @mentions / @all: notify the addressed users in-app (notifications
+    // feed) and with targeted pushes. Best-effort and async — a missing
+    // migration never blocks the sender.
+    Promise.resolve()
+      .then(async () => {
+        const mentionedUserIds = await createMentionNotifications(
+          user.userId,
+          content || ""
+        );
+        for (const mentionedUserId of mentionedUserIds) {
+          try {
+            await sendInteractionPush({
+              userId: mentionedUserId,
+              title: `@${username} mentioned you in Creed`,
+              body: (content || "").slice(0, 120),
+              url: "/fan-club",
+            });
+          } catch (err) {
+            console.error("Mention push failed:", err);
+          }
+        }
+      })
+      .catch((err) => console.error("Mention notifications failed:", err));
 
     // If this is a reply, notify the author of the original message —
     // "Your message was replied to" — unless they replied to themselves.

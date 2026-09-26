@@ -7,6 +7,7 @@ import {
   MessageCircle,
   UserPlus,
   Megaphone,
+  AtSign,
   Loader2,
 } from "lucide-react";
 import type { NotificationWithActor } from "@/lib/db";
@@ -30,6 +31,7 @@ const typeConfig = {
   comment: { icon: MessageCircle, color: "text-sky-400" },
   follow: { icon: UserPlus, color: "text-emerald-400" },
   post: { icon: Megaphone, color: "text-primary" },
+  mention: { icon: AtSign, color: "text-orange-400" },
 } as const;
 
 export function NotificationsFeed() {
@@ -133,7 +135,13 @@ export function NotificationsFeed() {
                 />
               </div>
               <Link
-                href={notification.post_id ? `/post/${notification.post_id}` : "#"}
+                href={
+                  notification.type === "mention"
+                    ? "/fan-club"
+                    : notification.post_id
+                      ? `/post/${notification.post_id}`
+                      : "#"
+                }
                 className="mt-1 block"
               >
                 <p className="text-sm text-secondary">
@@ -141,6 +149,7 @@ export function NotificationsFeed() {
                   {notification.type === "comment" && "commented on your post"}
                   {notification.type === "follow" && "started following you"}
                   {notification.type === "post" && "posted something new"}
+                  {notification.type === "mention" && "mentioned you in Creed"}
                 </p>
               </Link>
             </div>

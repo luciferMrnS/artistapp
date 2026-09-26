@@ -95,7 +95,12 @@ export interface Follow {
 
 // ─── Notification ───────────────────────────────────
 
-export type NotificationType = "like" | "comment" | "follow" | "post";
+export type NotificationType =
+  | "like"
+  | "comment"
+  | "follow"
+  | "post"
+  | "mention";
 
 export interface Notification {
   id: string;
@@ -2003,6 +2008,82 @@ async function createNotification(
     if (error) console.error("Error creating notification:", error);
   } catch (err) {
     console.error("Failed to create notification:", err);
+  }
+}
+
+/**
+ * Resolve a Creed message's @mentions / @all and create a "mention"
+ * notification row for every addressed user (best-effort, never throws).
+ *
+ * - `@all` addresses every registered user
+ * - `@username` addresses that user (case-insensitive, must exist)
+ * - the sender is never notified about their own message
+ *
+ * Returns the notified user ids (excluding the sender) so callers can fire
+ * targeted push notifications. Degrades to an empty list when the mention
+ * migration hasn't been applied yet (missing table or 'mention' type).
+ */
+export async function createMentionNotifications(
+  actorId: string,
+  content: string
+): Promise<string[]> {
+  try {
+    const mentionAll = /(^|\s)@all(\s|$)/i.test(content);
+    const mentionedNames = new Set(
+      [...content.matchAll(/(^|\s)@([a-zA-Z0-9_.]+)/g)].map((m) =>
+        m[2].toLowerCase()
+      )
+    );
+    if (!mentionAll && mentionedNames.size === 0) return [];
+
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .select("id, username");
+    if (error) {
+      console.error("Error fetching users for mentions:", error);
+      return [];
+    }
+
+    const users = (data ?? []) as Array<{ id: string; username: string }>;
+    const notified = mentionAll
+      ? users.map((u) => u.id)
+      : users
+          .filter((u) => mentionedNames.has(u.username.toLowerCase()))
+          .map((u) => u.id);
+
+    const recipients = [
+      ...new Set(notified),
+    ].filter((id) => id !== actorId);
+    if (recipients.length === 0) return [];
+
+    const now = new Date().toISOString();
+    const rows = recipients.map((userId, i) => ({
+      id: `notif_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`,
+      user_id: userId,
+      type: "mention" as NotificationType,
+      actor_id: actorId,
+      post_id: null,
+      read: false,
+      created_at: now,
+    }));
+
+    const { error: insertError } = await supabaseAdmin
+      .from("notifications")
+      .insert(rows);
+
+    if (insertError) {
+      // Migration not applied (missing table) or the 'mention' type is not
+      // allowed by the CHECK constraint yet — degrade silently so message
+      // sending is never blocked.
+      if (!isTableMissing(insertError) && insertError.code !== "23514") {
+        console.error("Error creating mention notifications:", insertError);
+      }
+    }
+
+    return recipients;
+  } catch (err) {
+    console.error("Failed to create mention notifications:", err);
+    return [];
   }
 }
 
