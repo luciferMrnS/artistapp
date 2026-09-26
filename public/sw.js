@@ -2,8 +2,14 @@
  * offline fallback. Only same-origin GET asset/navigation requests are
  * cached — API/auth requests always go to the network. */
 
-const CACHE_NAME = "kendrick-david-v2";
-const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
+/* Static shell only. The root document is deliberately not pre-cached: it is
+   personalised by session (a signed-in fan is redirected to /community), so
+ * baking one version of it into the cache at install time is what put the
+ * anonymous landing page in front of signed-in fans. The fetch handler caches
+ * each page under the URL actually requested, so the offline fallback fills
+ * itself in from real browsing. */
+const CACHE_NAME = "kendrick-david-v3";
+const SHELL = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -39,11 +45,29 @@ self.addEventListener("fetch", (event) => {
   // Navigations: try network, fall back to the cached shell when offline.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
-        return response;
-      }).catch(() => caches.match("/"))
+      fetch(request)
+        .then((response) => {
+          /* Cache under the URL that was actually asked for, and never cache a
+             redirect. This used to be an unconditional cache.put("/", copy),
+             which meant whichever page happened to be visited last was stored
+             under "/": a signed-in fan's / is a 307 to /community, so the
+             community's HTML landed in the cache at "/", and an anonymous visit
+             to / overwrote it with the landing page. One shared slot, last
+             writer won, and on a failed request the offline fallback could
+             serve a signed-in fan the anonymous landing page.
+             response.redirected is what identifies the followed 307 here -
+             its url has moved, so its body belongs to the other URL. */
+          if (response.ok && !response.redirected) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          /* This exact page first, then the root shell, so being offline inside
+             the community still renders rather than hard-failing. */
+          caches.match(request).then((hit) => hit || caches.match("/"))
+        )
     );
     return;
   }
