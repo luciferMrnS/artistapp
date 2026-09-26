@@ -370,18 +370,35 @@ export function FeedEditor({
       )}
 
       {/* ------------------------------------------------------------ form */}
-      <section className="rounded-2xl border border-border bg-zinc-900/50 p-4">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold">
-            {editing ? "Edit item" : "Add to the feed"}
-          </h2>
+      <section
+        id="lf-form"
+        className={`scroll-mt-6 rounded-2xl border bg-zinc-900/50 p-4 ${
+          editing ? "border-primary/60 ring-1 ring-primary/30" : "border-border"
+        }`}
+      >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">
+              {editing ? "Editing an item" : "Add to the feed"}
+            </h2>
+            <p className="mt-0.5 text-xs text-secondary">
+              {editing ? (
+                <span className="text-primary">
+                  Editing &ldquo;{draft.title || "untitled"}&rdquo; — change a field and
+                  save. Cancel to leave it untouched.
+                </span>
+              ) : (
+                "Fill this in to put a new picture or video on the landing page."
+              )}
+            </p>
+          </div>
           {editing && (
             <button
               type="button"
               onClick={reset}
-              className="inline-flex items-center gap-1.5 text-sm text-secondary transition hover:text-white"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-secondary transition hover:border-primary/50 hover:text-white"
             >
-              <X className="h-4 w-4" /> Cancel
+              <X className="h-4 w-4" /> Cancel edit
             </button>
           )}
         </div>
@@ -513,25 +530,25 @@ export function FeedEditor({
         </div>
 
         <div className="mt-4">
-          <span className={labelClass}>Poster</span>
+          <span className={labelClass}>Poster image — upload it here</span>
           <div className="flex flex-wrap items-center gap-4">
             {draft.posterUrl ? (
               <div
                 className="relative shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-950"
-                style={previewSize(draft.posterWidth, draft.posterHeight, 96, 200)}
+                style={previewSize(draft.posterWidth, draft.posterHeight, 72, 140)}
               >
                 <Image
                   src={draft.posterUrl}
                   alt=""
                   fill
-                  sizes="200px"
+                  sizes="140px"
                   className="object-contain"
                 />
               </div>
             ) : (
               <div
                 className="flex shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-xs text-secondary"
-                style={{ width: 200, height: 96 }}
+                style={{ width: 140, height: 72 }}
               >
                 No poster yet
               </div>
@@ -580,17 +597,31 @@ export function FeedEditor({
 
       {/* ------------------------------------------------------------- list */}
       <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">
             On the landing page <span className="text-secondary">({items.length})</span>
           </h2>
-          <Link
-            href="/"
-            target="_blank"
-            className="inline-flex items-center gap-1.5 text-sm text-secondary transition hover:text-white"
-          >
-            View page <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                document
+                  .getElementById("lf-form")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" /> Add new
+            </button>
+            <Link
+              href="/"
+              target="_blank"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-secondary transition hover:border-primary/50 hover:text-white"
+            >
+              View page <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -626,14 +657,18 @@ export function FeedEditor({
                 </div>
 
                 <div
-                  className="shrink-0 overflow-hidden rounded-lg border border-border bg-zinc-950"
-                  style={previewSize(item.poster.width, item.poster.height, 56, 120)}
+                  /* `relative` is load-bearing: next/image's `fill` is
+                     position:absolute inset:0, so without a positioned wrapper
+                     it resolves against the initial containing block and every
+                     row painted a viewport-sized image over the whole editor. */
+                  className="relative shrink-0 overflow-hidden rounded-lg border border-border bg-zinc-950"
+                  style={previewSize(item.poster.width, item.poster.height, 44, 88)}
                 >
                   <Image
                     src={item.poster.src}
                     alt=""
                     fill
-                    sizes="120px"
+                    sizes="88px"
                     className="object-contain"
                   />
                 </div>
@@ -643,7 +678,7 @@ export function FeedEditor({
                   <p className="truncate text-xs text-secondary">{describeItem(item)}</p>
                 </div>
 
-                <div className="ml-auto flex items-center gap-1">
+                <div className="ml-auto flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -651,13 +686,15 @@ export function FeedEditor({
                       setEditing(true);
                       setError(null);
                       setNotice(null);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
+                      document
+                        .getElementById("lf-form")
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
                     disabled={busy}
                     aria-label={`Edit ${item.title}`}
-                    className="rounded-lg p-2 text-secondary transition hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-secondary transition hover:border-primary/50 hover:text-white disabled:opacity-40"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-3.5 w-3.5" /> Edit
                   </button>
                   {confirmingDelete === item.id ? (
                     <>
@@ -683,9 +720,9 @@ export function FeedEditor({
                       onClick={() => setConfirmingDelete(item.id)}
                       disabled={busy}
                       aria-label={`Remove ${item.title}`}
-                      className="rounded-lg p-2 text-secondary transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-secondary transition hover:border-red-500/40 hover:text-red-300 disabled:opacity-40"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" /> Remove
                     </button>
                   )}
                 </div>
