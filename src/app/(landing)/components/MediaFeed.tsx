@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, X } from "lucide-react";
-import { embedSrc, type MediaItem } from "@/lib/landing-feed";
+import { embedSrc, tileRatio, type MediaItem } from "@/lib/landing-feed";
 
 /**
  * The picture + video feed.
@@ -65,12 +65,12 @@ export function MediaFeed({ items }: { items: MediaItem[] }) {
                   : `View ${item.title}`
               }
             >
-              {/* Ratio comes from the poster's own dimensions, so a new feed
-                  entry never has to name a Tailwind aspect class. */}
+              {/* Ratio comes from the poster's own dimensions, clamped by
+                  tileRatio() so one tall poster can't dominate the grid. */}
               <span
                 className="lp-frame block"
                 style={{
-                  aspectRatio: `${item.poster.width} / ${item.poster.height}`,
+                  aspectRatio: tileRatio(item.poster.width, item.poster.height),
                 }}
               >
                 <Image

@@ -184,6 +184,10 @@ html[data-theme="light"] [data-app-shell] {
   overflow: hidden;
   background-color: #ececeb;
   border-radius: 0.75rem;
+  /* Backstop only. tileRatio() already bounds a card to square..16:9, which in
+     the widest column lands well under this; the cap is here so that a poster
+     with unusable dimensions still cannot make one card swallow the viewport. */
+  max-height: 60vh;
 }
 
 .lp-frame img {

@@ -18,6 +18,36 @@ export type Poster = {
   alt: string;
 };
 
+/**
+ * Bounds for a feed tile's aspect ratio, as width / height.
+ *
+ * Cards take their shape from the poster so a new entry never has to name a
+ * Tailwind aspect class, and the varied ratios are what make the grid look
+ * editorial rather than uniform. But a poster's own ratio is not always a sane
+ * *tile* ratio: the "Landmark" visualizer is 880x1566 (0.56), which in a
+ * 3-column grid produced a 355x631 card — 70% of the viewport — sitting next to
+ * 199px neighbours. One thumbnail, and the grid stopped reading as a grid.
+ *
+ * Clamping to square..16:9 keeps the variety while bounding the tallest card to
+ * the width of its column. Anything outside the range is cropped by the tile's
+ * object-fit; the uncropped poster is still shown in the modal, which uses
+ * object-contain. Replacing the file with a squarer crop is the other fix, but
+ * that is the artist's call — the layout should not depend on it.
+ */
+export const MIN_TILE_RATIO = 1;
+export const MAX_TILE_RATIO = 16 / 9;
+
+/** A tile's aspect ratio, clamped to {@link MIN_TILE_RATIO}..{@link MAX_TILE_RATIO}. */
+export function tileRatio(width: number, height: number): number {
+  // A zero or missing dimension would make aspect-ratio divide by zero and
+  // collapse the card, so fall back to a square rather than trusting the data.
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return MIN_TILE_RATIO;
+  }
+  const ratio = width / height;
+  return Math.min(MAX_TILE_RATIO, Math.max(MIN_TILE_RATIO, ratio));
+}
+
 export type MediaItem = {
   /** Unique and stable — used as the React key and to restart playback. */
   id: string;
