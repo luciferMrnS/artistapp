@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { findUserById } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
+import { isValidReleaseDate } from "@/lib/landing-feed";
 
 /**
  * Every /api/landing-feed route is artist-only. The role is read from the
@@ -41,6 +42,10 @@ const LIMITS = {
   title: 120,
   note: 120,
   alt: 300,
+  /* Long enough for a real paragraph, short enough that a paste of a whole
+     article cannot bloat the page and its structured data. Matches the CHECK
+     constraint in migration_landing_feed_copy.sql. */
+  description: 1200,
 } as const;
 
 export type Provider = "youtube" | "vimeo";
@@ -57,6 +62,8 @@ export type ParsedItem = {
   kind: "video" | "photo";
   title: string;
   note?: string | null;
+  releasedOn?: string | null;
+  description?: string | null;
   provider?: Provider | null;
   providerId?: string | null;
   posterUrl: string;
@@ -68,6 +75,22 @@ export type ParsedItem = {
 
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+/**
+ * Normalise a release date, or explain why it is not usable. The artist is
+ * given a chance to correct the field rather than having the value dropped, so
+ * they find out their date did not save instead of finding a page with no date
+ * on it three months later.
+ */
+function releaseDate(value: unknown): { value: string } | { error: string } {
+  if (value === undefined || value === null || value === "") return { value: "" };
+  if (typeof value !== "string") return { error: "Release date must be a date" };
+  const trimmed = value.trim();
+  if (!isValidReleaseDate(trimmed)) {
+    return { error: "Release date must be a real date in YYYY-MM-DD form" };
+  }
+  return { value: trimmed };
 }
 
 /**
@@ -132,18 +155,25 @@ export function parseItemBody(
   }
 
   const note = text(raw.note, LIMITS.note);
+  const description = text(raw.description, LIMITS.description);
+
+  const released = releaseDate(raw.releasedOn);
+  if ("error" in released) return { error: released.error };
 
   // Videos need a player; photos must not carry one. Enforced here as well as
   // in the database CHECK so the artist gets a readable message.
+  let provider: Provider | null = null;
+  let providerId: string | null = null;
+
   if (kind === "video") {
-    const provider = raw.provider;
-    if (provider !== "youtube" && provider !== "vimeo") {
+    if (raw.provider !== "youtube" && raw.provider !== "vimeo") {
       return { error: 'Provider must be "youtube" or "vimeo"' };
     }
-    const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : "";
+    provider = raw.provider;
+    const id = typeof raw.providerId === "string" ? raw.providerId.trim() : "";
     const valid = provider === "youtube"
-      ? PROVIDER_ID.test(providerId)
-      : VIMEO_ID.test(providerId);
+      ? PROVIDER_ID.test(id)
+      : VIMEO_ID.test(id);
     if (!valid) {
       return {
         error:
@@ -152,23 +182,12 @@ export function parseItemBody(
             : "That does not look like a Vimeo video id",
       };
     }
-    return {
-      item: {
-        ...(requireId ? {} : { id: text(raw.id, 60) || undefined }),
-        kind,
-        title,
-        alt,
-        note: note || null,
-        provider,
-        providerId,
-        posterUrl,
-        posterPath: typeof raw.posterPath === "string" ? raw.posterPath : null,
-        posterWidth: raw.posterWidth,
-        posterHeight: raw.posterHeight,
-      },
-    };
+    providerId = id;
   }
 
+  /* One return for both kinds: the two branches used to build the same object
+     separately, which is how a field ends up saved for a video and silently
+     dropped for a photo. */
   return {
     item: {
       ...(requireId ? {} : { id: text(raw.id, 60) || undefined }),
@@ -176,8 +195,10 @@ export function parseItemBody(
       title,
       alt,
       note: note || null,
-      provider: null,
-      providerId: null,
+      releasedOn: released.value || null,
+      description: description || null,
+      provider,
+      providerId,
       posterUrl,
       posterPath: typeof raw.posterPath === "string" ? raw.posterPath : null,
       posterWidth: raw.posterWidth,

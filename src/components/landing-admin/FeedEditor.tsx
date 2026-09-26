@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { uploadErrorOf, uploadWithProgress } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
-import type { FeedProvider, MediaItem } from "@/lib/landing-feed";
+import { isValidReleaseDate, formatReleaseDate, type FeedProvider, type MediaItem } from "@/lib/landing-feed";
 
 /**
  * The artist's editor for the public landing page's picture + video feed.
@@ -39,6 +39,8 @@ type Draft = {
   kind: "video" | "photo";
   title: string;
   note: string;
+  releasedOn: string;
+  description: string;
   alt: string;
   provider: FeedProvider;
   providerId: string;
@@ -53,6 +55,8 @@ const EMPTY: Draft = {
   kind: "video",
   title: "",
   note: "",
+  releasedOn: "",
+  description: "",
   alt: "",
   provider: "youtube",
   providerId: "",
@@ -68,6 +72,8 @@ function draftFromItem(item: MediaItem): Draft {
     kind: item.kind,
     title: item.title,
     note: item.note ?? "",
+    releasedOn: item.releasedOn ?? "",
+    description: item.description ?? "",
     alt: item.poster.alt,
     provider: item.kind === "video" && "vimeo" in item.source ? "vimeo" : "youtube",
     providerId:
@@ -96,6 +102,12 @@ function describeItem(item: MediaItem): string {
     parts.push("Photo");
   }
   if (item.note) parts.push(item.note);
+  if (item.releasedOn) {
+    parts.push(formatReleaseDate(item.releasedOn) ?? item.releasedOn);
+  }
+  /* Surfaced rather than left silent: the page is thin without it, and the
+     only way the artist learns that is by being told here. */
+  if (!item.description) parts.push("no description");
   return parts.join(" · ");
 }
 
@@ -242,6 +254,9 @@ export function FeedEditor({
     if (!draft.title.trim()) return setError("Title is required");
     if (!draft.alt.trim()) return setError("Alt text is required");
     if (!draft.posterUrl) return setError("A poster image is required");
+    if (draft.releasedOn.trim() && !isValidReleaseDate(draft.releasedOn.trim())) {
+      return setError("Release date must be a real date in YYYY-MM-DD form");
+    }
     if (draft.kind === "video" && !draft.providerId.trim()) {
       return setError("A video id is required");
     }
@@ -250,6 +265,8 @@ export function FeedEditor({
       kind: draft.kind,
       title: draft.title.trim(),
       note: draft.note.trim() || null,
+      releasedOn: draft.releasedOn.trim() || null,
+      description: draft.description.trim() || null,
       alt: draft.alt.trim(),
       provider: draft.kind === "video" ? draft.provider : null,
       providerId: draft.kind === "video" ? draft.providerId.trim() : null,
@@ -513,6 +530,43 @@ export function FeedEditor({
               className={inputClass}
             />
           </div>
+        </div>
+
+        <div className="mt-4">
+          <label className={labelClass} htmlFor="lf-released-on">
+            Release date <span className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="lf-released-on"
+            type="date"
+            value={draft.releasedOn}
+            onChange={(e) => set("releasedOn", e.target.value)}
+            aria-describedby="lf-released-on-hint"
+            className={inputClass}
+          />
+          <p id="lf-released-on-hint" className="mt-1.5 text-xs text-secondary">
+            Shown on the release&rsquo;s page and sent to Google as its publish
+            date. Leave it blank if it has not been announced.
+          </p>
+        </div>
+
+        <div className="mt-4">
+          <label className={labelClass} htmlFor="lf-description">
+            Description <span className="font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="lf-description"
+            rows={5}
+            value={draft.description}
+            onChange={(e) => set("description", e.target.value)}
+            placeholder="A few sentences about this release — what it is about, who it is with, where it was made. This is the text search engines read, so write for someone who has never heard of it."
+            className={`${inputClass} resize-y`}
+          />
+          <p className="mt-1.5 text-xs text-secondary">
+            {draft.description.trim().length}/1200. Without this the page is
+            just a title and an image, which is too little to rank for
+            anything.
+          </p>
         </div>
 
         <div className="mt-4">

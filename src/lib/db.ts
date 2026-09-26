@@ -4089,6 +4089,8 @@ interface LandingFeedRow {
   kind: "video" | "photo";
   title: string;
   note: string | null;
+  released_on: string | null;
+  description: string | null;
   provider: FeedProvider | null;
   provider_id: string | null;
   poster_url: string;
@@ -4116,6 +4118,11 @@ function landingRowToItem(row: LandingFeedRow): MediaItem {
       alt: row.alt,
     },
     ...(row.note ? { note: row.note } : {}),
+    /* A row written before migration_landing_feed_copy.sql has these columns
+       NULL, and a database that has not had the migration applied at all does
+       not return them at all — both are simply "no date, no description". */
+    ...(row.released_on ? { releasedOn: row.released_on } : {}),
+    ...(row.description ? { description: row.description } : {}),
   };
 
   if (row.kind === "video" && row.provider && row.provider_id) {
@@ -4142,6 +4149,36 @@ export async function isLandingFeedReady(): Promise<boolean> {
     .select("id")
     .limit(1);
   return !isTableMissing(error);
+}
+
+/**
+ * True once migration_landing_feed_copy.sql has been applied.
+ *
+ * This exists because PostgREST rejects a *whole* insert or update that
+ * mentions a column the table does not have - not a partial write, the entire
+ * request. So on a database that has not had the migration, writing
+ * released_on/description would break saving a feed item altogether, not just
+ * those two fields. The public page is unaffected (it reads, and an absent
+ * column simply comes back undefined), but the artist's editor would appear
+ * broken, so the write path has to ask first.
+ *
+ * Not cached: the answer changes the moment the migration is applied, and a
+ * stale "false" would leave the editor looking broken after the artist fixed
+ * it. One extra cheap select per save is not worth that.
+ */
+async function landingFeedHasCopyColumns(): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from("landing_feed")
+    .select("released_on, description")
+    .limit(1);
+
+  if (!error) return true;
+  /* PGRST204 is PostgREST's "could not find the column". A missing table means
+     the columns are certainly absent too. Anything else is a transport blip,
+     and assuming the columns exist keeps the current behaviour. */
+  if (error.code === "PGRST204" || isTableMissing(error)) return false;
+  console.error("Error probing landing feed columns:", error);
+  return true;
 }
 
 /**
@@ -4184,6 +4221,10 @@ export interface LandingItemInput {
   kind: "video" | "photo";
   title: string;
   note?: string | null;
+  /** YYYY-MM-DD, already validated by the API guard. */
+  releasedOn?: string | null;
+  /** The artist's own words; this is the copy the detail page ranks with. */
+  description?: string | null;
   provider?: FeedProvider | null;
   providerId?: string | null;
   posterUrl: string;
@@ -4201,6 +4242,7 @@ export async function createLandingItem(
   input: LandingItemInput
 ): Promise<MediaItem | { error: string }> {
   const position = await nextLandingPosition();
+  const hasCopyColumns = await landingFeedHasCopyColumns();
 
   const row: LandingFeedRow = {
     id: input.id,
@@ -4208,6 +4250,8 @@ export async function createLandingItem(
     kind: input.kind,
     title: input.title,
     note: input.note || null,
+    released_on: input.releasedOn || null,
+    description: input.description || null,
     provider: input.kind === "video" ? (input.provider ?? null) : null,
     provider_id: input.kind === "video" ? (input.providerId ?? null) : null,
     poster_url: input.posterUrl,
@@ -4218,6 +4262,15 @@ export async function createLandingItem(
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+
+  /* Dropping the keys is the whole point: a key naming a column that does not
+     exist fails the entire insert, so an un-migrated database would refuse to
+     add the item at all. The artist gets the item without a date or a
+     description, which is exactly where they started. */
+  if (!hasCopyColumns) {
+    delete (row as Partial<LandingFeedRow>).released_on;
+    delete (row as Partial<LandingFeedRow>).description;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("landing_feed")
@@ -4278,9 +4331,16 @@ export async function updateLandingItem(
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+  /* Same reason as the insert path: naming a column the table lacks fails the
+     whole update, not just these two assignments. */
+  const hasCopyColumns = await landingFeedHasCopyColumns();
   if (patch.kind !== undefined) update.kind = patch.kind;
   if (patch.title !== undefined) update.title = patch.title;
   if (patch.note !== undefined) update.note = patch.note || null;
+  if (hasCopyColumns) {
+    if (patch.releasedOn !== undefined) update.released_on = patch.releasedOn || null;
+    if (patch.description !== undefined) update.description = patch.description || null;
+  }
   if (patch.alt !== undefined) update.alt = patch.alt;
   if (patch.provider !== undefined) update.provider = patch.provider || null;
   if (patch.providerId !== undefined) update.provider_id = patch.providerId || null;

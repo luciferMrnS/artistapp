@@ -63,6 +63,19 @@ export type MediaItem = {
   title: string;
   /** Shown under the title in the media modal, e.g. "Official video". */
   note?: string;
+  /**
+   * Release day as YYYY-MM-DD. A plain date, never a timestamp: it is
+   * rendered as a calendar day and handed to JSON-LD as datePublished,
+   * both of which a time component would only muddy. Optional, because a
+   * release can be announced before it has a day.
+   */
+  releasedOn?: string;
+  /**
+   * The artist's own words about the release. This is the copy the
+   * /music/[id] page actually needs — the rest of the page is a title and
+   * an image, which is not enough text to rank for anything.
+   */
+  description?: string;
   poster: Poster;
 } & (
   | { kind: "photo" }
@@ -200,4 +213,65 @@ export function slugifyFeedId(title: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   return slug || "item";
+}
+
+/* ---------------------------------------------------------------------------
+ * Release dates
+ *
+ * A release has a calendar day, not an instant. Kept as the string "YYYY-MM-DD"
+ * end to end, and never round-tripped through `new Date()` for display: that
+ * constructor reads the string as UTC midnight, so in any negative-offset
+ * timezone "2024-05-01" formats as April 30. A release showing the wrong day is
+ * worse than showing none, so the parts are formatted directly instead.
+ * ------------------------------------------------------------------------- */
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+type DateParts = { year: number; month: number; day: number };
+
+/**
+ * Split a strict YYYY-MM-DD string, rejecting values that are shaped like a
+ * date but are not one ("2024-13-45" parses fine, it is just wrong).
+ */
+function parseIsoDate(value: string): DateParts | null {
+  const match = ISO_DATE.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  // Day 31 does not exist in every month, and a 29th in a common year is not a
+  // date either. Reject those here rather than rendering "31 February".
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+export function isValidReleaseDate(value: string): boolean {
+  return parseIsoDate(value) !== null;
+}
+
+/**
+ * "2024-05-01" -> "1 May 2024", or null if the value is not a real date. The
+ * caller decides what to do about a missing date; this never throws.
+ */
+export function formatReleaseDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const parts = parseIsoDate(value);
+  if (!parts) return null;
+  return `${parts.day} ${MONTHS[parts.month - 1]} ${parts.year}`;
 }

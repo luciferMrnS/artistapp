@@ -4,7 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, Play } from "lucide-react";
 import { getLandingFeed } from "@/lib/db";
-import { embedSrc, type MediaItem } from "@/lib/landing-feed";
+import {
+  embedSrc,
+  formatReleaseDate,
+  isValidReleaseDate,
+  type MediaItem,
+} from "@/lib/landing-feed";
 import { absoluteUrl } from "@/lib/site";
 import { ARTIST } from "../../content";
 
@@ -42,6 +47,30 @@ function describe(item: MediaItem): string {
     : `${item.title} — ${kind} by ${ARTIST.name}.`;
 }
 
+/** Meta descriptions get truncated in results anyway, and a description cut
+ *  mid-word reads worse than a clean shorter sentence. */
+const META_LIMIT = 155;
+
+function metaDescription(item: MediaItem): string {
+  if (item.description) {
+    const flat = item.description.replace(/\s+/g, " ").trim();
+    if (flat.length <= META_LIMIT) return flat;
+    const cut = flat.slice(0, META_LIMIT);
+    const lastSpace = cut.lastIndexOf(" ");
+    return `${cut.slice(0, lastSpace > 40 ? lastSpace : META_LIMIT).trimEnd()}…`;
+  }
+  return describe(item);
+}
+
+/** The release day, but only if it is genuinely one. A hand-edited feed entry
+ *  with "sometime in May" must not reach the structured data, where Google
+ *  treats a bad datePublished as a quality problem. */
+function publishedDate(item: MediaItem): string | undefined {
+  return item.releasedOn && isValidReleaseDate(item.releasedOn)
+    ? item.releasedOn
+    : undefined;
+}
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
   const item = byId(await getLandingFeed(), id);
@@ -49,22 +78,23 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const url = absoluteUrl(`/music/${item.id}`);
   const poster = absoluteUrl(item.poster.src);
+  const summary = metaDescription(item);
 
   return {
     title: item.title,
-    description: describe(item),
+    description: summary,
     alternates: { canonical: url },
     openGraph: {
       type: item.kind === "video" ? "video.other" : "article",
       url,
       title: `${item.title} — ${ARTIST.name}`,
-      description: describe(item),
+      description: summary,
       images: [{ url: poster, width: item.poster.width, height: item.poster.height, alt: item.poster.alt }],
     },
     twitter: {
       card: "summary_large_image",
       title: `${item.title} — ${ARTIST.name}`,
-      description: describe(item),
+      description: summary,
       images: [poster],
     },
   };
@@ -78,6 +108,9 @@ export default async function MusicPage({ params }: Params) {
 
   const url = absoluteUrl(`/music/${item.id}`);
   const others = feed.filter((other) => other.id !== item.id).slice(0, 4);
+  const releasedOn = publishedDate(item);
+  const releasedLabel = formatReleaseDate(item.releasedOn);
+  const summary = metaDescription(item);
 
   /* VideoObject / ImageObject for this item, plus the breadcrumb trail. The
      item is the page's subject, so it is described on its own rather than as
@@ -97,22 +130,24 @@ export default async function MusicPage({ params }: Params) {
         ? {
             "@type": "VideoObject",
             name: item.title,
-            description: describe(item),
+            description: summary,
             thumbnailUrl: absoluteUrl(item.poster.src),
             embedUrl: embedSrc(item) ?? undefined,
             contentUrl: watchUrl(item),
             url,
             mainEntityOfPage: url,
+            uploadDate: releasedOn,
           }
         : {
             "@type": "ImageObject",
             name: item.title,
             caption: item.poster.alt,
-            description: describe(item),
+            description: summary,
             contentUrl: absoluteUrl(item.poster.src),
             url,
             width: item.poster.width,
             height: item.poster.height,
+            dateCreated: releasedOn,
           },
     ],
   };
@@ -147,6 +182,14 @@ export default async function MusicPage({ params }: Params) {
               {item.title}
             </h1>
 
+            {/* A machine-readable date as well as the visible one, so the day a
+                page says is provably the day the structured data claims. */}
+            {releasedLabel && (
+              <p className="mt-3 text-sm text-[#2e2e2e]">
+                <time dateTime={releasedOn}>Released {releasedLabel}</time>
+              </p>
+            )}
+
             <div className="mt-8 overflow-hidden rounded-[1.25rem] border border-black/10 bg-[#ececeb]">
               <Image
                 src={item.poster.src}
@@ -176,9 +219,18 @@ export default async function MusicPage({ params }: Params) {
               </div>
             )}
 
-            <p className="lp-body mt-8 max-w-[62ch] text-[0.95rem] sm:text-base">
-              {item.poster.alt}
-            </p>
+            {/* The artist's own words when there are any. Without them the page
+                falls back to the poster's alt text, which is written for a
+                screen reader and says nothing about the release. */}
+            {item.description ? (
+              <p className="lp-body mt-8 max-w-[62ch] whitespace-pre-line text-[0.95rem] sm:text-base">
+                {item.description}
+              </p>
+            ) : (
+              <p className="lp-body mt-8 max-w-[62ch] text-[0.95rem] sm:text-base">
+                {item.poster.alt}
+              </p>
+            )}
           </div>
         </section>
 

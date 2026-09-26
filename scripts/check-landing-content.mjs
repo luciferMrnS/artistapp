@@ -21,7 +21,7 @@ const root = resolve(here, "..");
 
 const feedUrl = pathToFileURL(resolve(root, "src/lib/landing-feed.ts")).href;
 
-const { STATIC_FEED, embedSrc } = await import(feedUrl);
+const { STATIC_FEED, embedSrc, isValidReleaseDate, formatReleaseDate } = await import(feedUrl);
 
 const problems = [];
 
@@ -43,6 +43,19 @@ for (const item of STATIC_FEED) {
   }
 
   if (!item.title) problems.push(`${where}: no title.`);
+
+  /* These two reach Google as structured data, so a bad value is worse than a
+     missing one - the page would ship a claim it cannot stand behind. */
+  if (item.releasedOn && !isValidReleaseDate(item.releasedOn)) {
+    problems.push(
+      `${where}: releasedOn "${item.releasedOn}" is not a real date in YYYY-MM-DD form. It is sent to Google as uploadDate.`
+    );
+  }
+  if (item.description && item.description.length > 1200) {
+    problems.push(
+      `${where}: description is ${item.description.length} characters. The limit is 1200, and the database rejects anything longer.`
+    );
+  }
 
   const { poster } = item;
   if (!poster) {
@@ -89,6 +102,34 @@ for (const item of STATIC_FEED) {
     }
   } else {
     problems.push(`${where}: unknown kind "${item.kind}". Use "video" or "photo".`);
+  }
+}
+
+/* The release-date formatter is the one piece of this that fails *silently*:
+   routing the string through `new Date()` reads it as UTC midnight, so in any
+   negative-offset timezone "2024-05-01" quietly becomes April 30 - a release
+   page claiming the wrong day, with no error anywhere. Pin the output so the
+   parts-based implementation is the only one that passes. */
+for (const [input, expected] of [
+  ["2024-05-01", "1 May 2024"],
+  ["2024-12-31", "31 December 2024"],
+  ["2024-01-09", "9 January 2024"],
+]) {
+  const actual = formatReleaseDate(input);
+  if (actual !== expected) {
+    problems.push(
+      `formatReleaseDate("${input}") returned ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}.`
+    );
+  }
+}
+
+/* Values shaped like a date that are not one. These would reach uploadDate if
+   they were not rejected, and Google treats a bad date as a quality problem. */
+for (const bad of ["2024-13-01", "2024-02-31", "2024-5-1", "01/05/2024", "May 2024", "2024-05-01T00:00:00Z"]) {
+  if (isValidReleaseDate(bad)) {
+    problems.push(
+      `isValidReleaseDate("${bad}") returned true, but it is not a plain YYYY-MM-DD calendar date.`
+    );
   }
 }
 
