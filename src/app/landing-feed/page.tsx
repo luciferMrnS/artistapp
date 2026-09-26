@@ -4,7 +4,7 @@ import { FeedEditor } from "@/components/landing-admin/FeedEditor";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/server-auth";
-import { getLandingFeed, isLandingFeedReady } from "@/lib/db";
+import { findUserById, getLandingFeed, isLandingFeedReady } from "@/lib/db";
 
 function LandingFeedPageContent({
   items,
@@ -49,7 +49,14 @@ export default async function LandingFeedPage() {
   const token = cookieStore.get("auth-token")?.value;
   const payload = token ? verifyToken(token) : null;
   if (!payload) redirect("/auth/login");
-  if (payload.role !== "artist") redirect("/");
+
+  /* The role is read from the database rather than taken from the token, the
+     same way requireArtist() reads it. A token minted while the user was still
+     the artist would otherwise render this page after they had been demoted,
+     leaving an editor whose every save fails with a 403. */
+  const user = await findUserById(payload.userId);
+  if (!user) redirect("/auth/login");
+  if (user.role !== "artist") redirect("/");
 
   /* Read here rather than in the client so the list the artist sees on arrival
      is the real one, and so the "run the migration" notice is accurate. */
