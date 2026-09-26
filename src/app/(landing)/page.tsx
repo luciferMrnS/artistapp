@@ -17,7 +17,11 @@ import { Reveal } from "./components/Reveal";
 import { ScrollCta } from "./components/ScrollCta";
 import { StructuredData } from "./components/StructuredData";
 import { getLandingFeed } from "@/lib/db";
-import { absoluteUrl, COMMUNITY_ROUTE } from "@/lib/site";
+import {
+  absoluteUrl,
+  COMMUNITY_ROUTE,
+  LANDING_PREVIEW_VALUE,
+} from "@/lib/site";
 import { getCurrentUser } from "@/lib/server-auth";
 
 /* The artist edits the feed from /landing-feed, so the page has to be rendered
@@ -67,18 +71,27 @@ export const metadata: Metadata = {
   ],
 };
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   /* This page is the anonymous front door: the marketing surface, and the
-     thing search engines and link previews are meant to see. A registered fan
-     has no use for it once they are signed in - /auth/login and
-     /auth/signup already send people to the community afterwards - so a
-     returning fan opening the site root, a bookmark or the installed PWA is
-     sent straight to their feed instead of being made to click past the
-     poster again.
+     thing search engines and link previews are meant to see. A signed-in
+     account has no use for it once they are in - /auth/login and
+     /auth/signup already send people to the community afterwards - so
+     returning fans and the artist alike, opening the site root, a bookmark or
+     the installed PWA, are sent straight to their feed instead of being made
+     to click past the poster again.
 
-     Scoped to fans. The artist is deliberately left on this page: it is
-     theirs, they edit the copy and the feed behind /landing-feed, and bouncing
-     them off it would make it impossible to preview what they publish.
+     The artist is redirected too. They were left on this page at first so
+     they could preview what they publish, but they are the person most likely
+     to open the site constantly, and being the one account that never reaches
+     the community is not worth a preview convenience. ?preview=1, linked from
+     /landing-feed, keeps that capability, and it shows the page exactly as
+     the public sees it rather than a special signed-in variant - which is the
+     point of a preview, since this page is deliberately identical for
+     everyone who is not being redirected.
 
      Safe for the page's own SEO. The condition is a signed cookie, and no
      crawler or unfurl bot sends one, so / keeps serving the landing page with
@@ -88,8 +101,9 @@ export default async function LandingPage() {
 
      redirect() works by throwing, so it has to stay outside any try/catch and
      ahead of the work below. */
+  const { preview } = await searchParams;
   const user = await getCurrentUser();
-  if (user?.role === "fan") {
+  if (user && preview !== LANDING_PREVIEW_VALUE) {
     redirect(COMMUNITY_ROUTE);
   }
 

@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/server-auth";
 import { findUserById, getLandingFeed, isLandingFeedReady } from "@/lib/db";
+import { LANDING_PREVIEW_URL } from "@/lib/site";
 
 function LandingFeedPageContent({
   items,
@@ -27,6 +28,14 @@ function LandingFeedPageContent({
                 </p>
                 <h1 className="text-xl font-bold">Landing Feed</h1>
               </div>
+              {/* Every signed-in account is redirected off / to the community,
+                  so this is how the artist still sees the page they edit. */}
+              <a
+                href={LANDING_PREVIEW_URL}
+                className="ml-auto text-sm text-secondary underline underline-offset-4 hover:text-white"
+              >
+                View live page
+              </a>
             </div>
           </header>
 

@@ -37,6 +37,25 @@ export function absoluteUrl(path: string): string {
 export const COMMUNITY_ROUTE = "/community";
 
 /**
+ * Opt out of the signed-in redirect on the landing page.
+ *
+ * The artist edits the copy and the feed on /landing-feed, so they still need
+ * to see what they published - but / is the anonymous front door and every
+ * signed-in account is redirected away from it. A query parameter is the
+ * smallest thing that gives the artist their own page back without
+ * reintroducing an exception for a role, which is what made them the one
+ * account that never reached the community in the first place.
+ */
+export const LANDING_PREVIEW_PARAM = "preview";
+
+/** The value the landing page looks for. Kept next to the name because the two
+ *  are easy to conflate - the page reads the param's value, not its key. */
+export const LANDING_PREVIEW_VALUE = "1";
+
+/** The landing page as the public sees it, for a signed-in artist. */
+export const LANDING_PREVIEW_URL = `/?${LANDING_PREVIEW_PARAM}=${LANDING_PREVIEW_VALUE}`;
+
+/**
  * Routes only a signed-in account should reach. They are all auth-guarded, so
  * this is crawl hygiene rather than access control - but there is no reason to
  * spend crawl budget on them, and indexing a login page is a bad look.
