@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, X } from "lucide-react";
 import {
@@ -60,55 +61,64 @@ export function MediaFeed({ items }: { items: MediaItem[] }) {
       <ul className="columns-1 gap-5 sm:columns-2 lg:columns-3">
         {items.map((item) => (
           <li key={item.id} className="mb-5 break-inside-avoid">
-            <button
-              type="button"
-              onClick={() => setOpenId(item.id)}
-              className="lp-card group block w-full text-left"
-              aria-label={
-                item.kind === "video"
-                  ? `Play ${item.title}`
-                  : `View ${item.title}`
-              }
-            >
-              {/* Ratio comes from the poster's own dimensions, clamped by
-                  tileRatio() so one tall poster can't dominate the grid. */}
-              <span
-                className="lp-frame block"
-                style={{
-                  aspectRatio: tileRatio(item.poster.width, item.poster.height),
-                }}
+            {/* The frame stays a button so a click still opens the modal, but
+                the title is a real link to /music/[id]. An <a> inside a
+                <button> is invalid HTML and crawlers ignore it, and without a
+                per-item URL nothing in the feed is individually indexable. */}
+            <div className="lp-card group">
+              <button
+                type="button"
+                onClick={() => setOpenId(item.id)}
+                className="block w-full text-left"
+                aria-label={
+                  item.kind === "video"
+                    ? `Play ${item.title}`
+                    : `View ${item.title}`
+                }
               >
-                <Image
-                  src={item.poster.src}
-                  alt={item.poster.alt}
-                  width={item.poster.width}
-                  height={item.poster.height}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  /* A poster too tall for its tile is letterboxed against the
-                      frame's own background rather than cropped, so the
-                      artwork is always shown whole. */
-                  className={`h-full w-full ${
-                    posterFitsTile(item.poster.width, item.poster.height)
-                      ? "object-cover"
-                      : "object-contain"
-                  }`}
-                />
-                <span className="lp-play" aria-hidden="true">
-                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-[#262626] shadow-xl transition-transform duration-300 group-hover:scale-110">
-                    <Play className="ml-0.5 h-6 w-6 fill-current" />
+                {/* Ratio comes from the poster's own dimensions, clamped by
+                    tileRatio() so one tall poster can't dominate the grid. */}
+                <span
+                  className="lp-frame block"
+                  style={{
+                    aspectRatio: tileRatio(item.poster.width, item.poster.height),
+                  }}
+                >
+                  <Image
+                    src={item.poster.src}
+                    alt={item.poster.alt}
+                    width={item.poster.width}
+                    height={item.poster.height}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    /* A poster too tall for its tile is letterboxed against the
+                        frame's own background rather than cropped, so the
+                        artwork is always shown whole. */
+                    className={`h-full w-full ${
+                      posterFitsTile(item.poster.width, item.poster.height)
+                        ? "object-cover"
+                        : "object-contain"
+                    }`}
+                  />
+                  <span className="lp-play" aria-hidden="true">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-[#262626] shadow-xl transition-transform duration-300 group-hover:scale-110">
+                      <Play className="ml-0.5 h-6 w-6 fill-current" />
+                    </span>
                   </span>
                 </span>
-              </span>
+              </button>
 
               <span className="mt-3 flex items-baseline justify-between gap-3">
-                <span className="lp-body text-[0.95rem] leading-none text-[#262626]">
+                <Link
+                  href={`/music/${item.id}`}
+                  className="lp-body truncate text-[0.95rem] leading-none text-[#262626] underline decoration-black/15 underline-offset-[5px] transition hover:decoration-black/50"
+                >
                   {item.title}
-                </span>
+                </Link>
                 <span className="lp-eyebrow shrink-0 text-[0.5625rem]">
                   {item.kind === "video" ? "Watch" : "Photo"}
                 </span>
               </span>
-            </button>
+            </div>
           </li>
         ))}
       </ul>
