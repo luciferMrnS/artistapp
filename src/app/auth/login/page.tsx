@@ -84,7 +84,7 @@ export default function LoginPage() {
       // Update auth context
       setUser(data.user);
       // Redirect to home
-      router.push("/");
+      router.push("/community");
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Login error:", err);

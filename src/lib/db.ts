@@ -7,6 +7,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { STATIC_FEED, type FeedProvider, type MediaItem } from "./landing-feed";
 
 // ─── User ───────────────────────────────────────────
 
@@ -4072,4 +4073,433 @@ export async function getCombinedUnreadCount(userId: string): Promise<{
     getDmUnreadCount(userId),
   ]);
   return { total: creed + dm, creed, dm };
+}
+
+// ─── Landing Page Feed ─────────────────────────────────────
+// The public landing page's picture + video grid, editable by the artist
+// from /landing-feed. Until database/migration_landing_feed.sql is applied
+// the table does not exist and the feed falls back to STATIC_FEED, so the
+// public page never goes blank because of a database problem.
+
+export const LANDING_MEDIA_BUCKET = "landing-media";
+
+interface LandingFeedRow {
+  id: string;
+  position: number;
+  kind: "video" | "photo";
+  title: string;
+  note: string | null;
+  provider: FeedProvider | null;
+  provider_id: string | null;
+  poster_url: string;
+  poster_path: string | null;
+  poster_width: number;
+  poster_height: number;
+  alt: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Rebuild the discriminated MediaItem union from a stored row. A video whose
+ * player is missing (only possible if the CHECK constraint was bypassed)
+ * degrades to a photo rather than rendering a blank card.
+ */
+function landingRowToItem(row: LandingFeedRow): MediaItem {
+  const base = {
+    id: row.id,
+    title: row.title,
+    poster: {
+      src: row.poster_url,
+      width: row.poster_width,
+      height: row.poster_height,
+      alt: row.alt,
+    },
+    ...(row.note ? { note: row.note } : {}),
+  };
+
+  if (row.kind === "video" && row.provider && row.provider_id) {
+    return {
+      ...base,
+      kind: "video",
+      source:
+        row.provider === "youtube"
+          ? { youtube: row.provider_id }
+          : { vimeo: row.provider_id },
+    };
+  }
+
+  return { ...base, kind: "photo" };
+}
+
+/**
+ * True once the migration has been applied — the artist editor reports this so
+ * it can tell them to run the SQL instead of showing an empty feed.
+ */
+export async function isLandingFeedReady(): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from("landing_feed")
+    .select("id")
+    .limit(1);
+  return !isTableMissing(error);
+}
+
+/**
+ * The feed the public landing page renders.
+ *
+ * A missing table falls back to the static copy; an empty table is respected,
+ * because that means the artist has deliberately removed everything.
+ */
+export async function getLandingFeed(): Promise<MediaItem[]> {
+  const { data, error } = await supabaseAdmin
+    .from("landing_feed")
+    .select("*")
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (isTableMissing(error)) return STATIC_FEED;
+    console.error("Error fetching landing feed:", error);
+    return STATIC_FEED;
+  }
+
+  return ((data ?? []) as LandingFeedRow[]).map(landingRowToItem);
+}
+
+/** Highest position currently in use, so new items land at the end. */
+async function nextLandingPosition(): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from("landing_feed")
+    .select("position")
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return 0;
+  return Number((data as { position: number }).position) + 1;
+}
+
+export interface LandingItemInput {
+  id: string;
+  kind: "video" | "photo";
+  title: string;
+  note?: string | null;
+  provider?: FeedProvider | null;
+  providerId?: string | null;
+  posterUrl: string;
+  posterPath?: string | null;
+  posterWidth: number;
+  posterHeight: number;
+  alt: string;
+}
+
+/**
+ * Append an item to the feed. Callers are responsible for authorising the
+ * artist and for validating the shape (see /api/landing-feed).
+ */
+export async function createLandingItem(
+  input: LandingItemInput
+): Promise<MediaItem | { error: string }> {
+  const position = await nextLandingPosition();
+
+  const row: LandingFeedRow = {
+    id: input.id,
+    position,
+    kind: input.kind,
+    title: input.title,
+    note: input.note || null,
+    provider: input.kind === "video" ? (input.provider ?? null) : null,
+    provider_id: input.kind === "video" ? (input.providerId ?? null) : null,
+    poster_url: input.posterUrl,
+    poster_path: input.posterPath || null,
+    poster_width: input.posterWidth,
+    poster_height: input.posterHeight,
+    alt: input.alt,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("landing_feed")
+    .insert([row])
+    .select()
+    .single();
+
+  if (error) {
+    if (isTableMissing(error)) {
+      return { error: "The landing feed is not set up yet (run migration_landing_feed.sql)" };
+    }
+    console.error("Error creating landing feed item:", error);
+    return { error: error.message || "Failed to add the item" };
+  }
+
+  return landingRowToItem(data as LandingFeedRow);
+}
+
+export type LandingItemPatch = Partial<
+  Omit<LandingItemInput, "id">
+>;
+
+/**
+ * Update the editable fields of one item.
+ *
+ * The payload is built column by column on purpose: PostgREST rejects the whole
+ * request if it contains a key that is not a column, so a camelCase field can
+ * never simply be spread in alongside its snake_case twin.
+ *
+ * Replacing a poster removes the object the row used to point at, so editing
+ * an item repeatedly doesn't leave a trail of unused images in the bucket.
+ *
+ * `posterPath` in a patch means "the storage path of the poster being
+ * installed", and is honoured only when `posterUrl` differs from what the row
+ * already holds — see the note inline. Pass it on a real replacement; omit it
+ * when the poster isn't changing.
+ */
+export async function updateLandingItem(
+  id: string,
+  patch: LandingItemPatch
+): Promise<MediaItem | { error: string }> {
+  const { data: current, error: readError } = await supabaseAdmin
+    .from("landing_feed")
+    .select("poster_url, poster_path")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readError) {
+    if (readError.code === "PGRST116") return { error: "Item not found" };
+    if (isTableMissing(readError)) {
+      return { error: "The landing feed is not set up yet (run migration_landing_feed.sql)" };
+    }
+    console.error("Error reading landing feed item:", readError);
+    return { error: readError.message || "Failed to save the item" };
+  }
+  if (!current) return { error: "Item not found" };
+
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.kind !== undefined) update.kind = patch.kind;
+  if (patch.title !== undefined) update.title = patch.title;
+  if (patch.note !== undefined) update.note = patch.note || null;
+  if (patch.alt !== undefined) update.alt = patch.alt;
+  if (patch.provider !== undefined) update.provider = patch.provider || null;
+  if (patch.providerId !== undefined) update.provider_id = patch.providerId || null;
+  if (patch.posterUrl !== undefined) update.poster_url = patch.posterUrl;
+
+  // `poster_path` is only written when the poster URL actually changes.
+  //
+  // MediaItem carries the public URL and dimensions but not the storage path, so
+  // the editor has no way to echo an existing item's path back — a title-only
+  // edit sends posterPath: null. Writing that through would null the column and
+  // then trip the cleanup below, deleting the live object out of storage and
+  // leaving the row pointing at a file that no longer exists.
+  //
+  // Keying off the URL changing catches both real replacements: a fresh upload
+  // (new URL, new path) and a hand-edited external URL (new URL, no path — the
+  // orphaned upload should go). An unchanged poster leaves the column alone.
+  const posterChanged =
+    patch.posterUrl !== undefined &&
+    (current as { poster_url: string }).poster_url !== patch.posterUrl;
+  if (posterChanged) update.poster_path = patch.posterPath || null;
+
+  if (patch.posterWidth !== undefined) update.poster_width = patch.posterWidth;
+  if (patch.posterHeight !== undefined) update.poster_height = patch.posterHeight;
+
+  const { data, error } = await supabaseAdmin
+    .from("landing_feed")
+    .update(update)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return { error: "Item not found" };
+    if (isTableMissing(error)) {
+      return { error: "The landing feed is not set up yet (run migration_landing_feed.sql)" };
+    }
+    console.error("Error updating landing feed item:", error);
+    return { error: error.message || "Failed to save the item" };
+  }
+
+  const previousPath = (current as { poster_path: string | null }).poster_path;
+  const nextPath = (data as LandingFeedRow).poster_path;
+  if (previousPath && previousPath !== nextPath) {
+    await removeLandingPoster(previousPath);
+  }
+
+  return landingRowToItem(data as LandingFeedRow);
+}
+
+/**
+ * Remove an item and its uploaded poster. Seeded rows point at files in
+ * /public rather than storage objects, so nothing is deleted for those.
+ */
+export async function deleteLandingItem(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error: fetchError } = await supabaseAdmin
+    .from("landing_feed")
+    .select("poster_path")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchError || !data) {
+    return { success: false, error: "Item not found" };
+  }
+
+  const { error } = await supabaseAdmin
+    .from("landing_feed")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (isTableMissing(error)) {
+      return { success: false, error: "The landing feed is not set up yet (run migration_landing_feed.sql)" };
+    }
+    console.error("Error deleting landing feed item:", error);
+    return { success: false, error: error.message || "Failed to delete the item" };
+  }
+
+  const posterPath = (data as { poster_path: string | null }).poster_path;
+  if (posterPath) {
+    await supabaseAdmin.storage.from(LANDING_MEDIA_BUCKET).remove([posterPath]);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Rewrite the display order. Ids not in the list keep their relative order at
+ * the end, so a stale client can never drop items off the feed.
+ */
+export async function reorderLandingFeed(
+  orderedIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabaseAdmin.from("landing_feed").select("id");
+  if (error) {
+    if (isTableMissing(error)) {
+      return { success: false, error: "The landing feed is not set up yet (run migration_landing_feed.sql)" };
+    }
+    console.error("Error reading feed for reorder:", error);
+    return { success: false, error: error.message || "Failed to reorder the feed" };
+  }
+
+  const known = ((data ?? []) as { id: string }[]).map((row) => row.id);
+  const seen = new Set(orderedIds.filter((id) => known.includes(id)));
+  const rest = known.filter((id) => !seen.has(id));
+  const finalOrder = [...seen, ...rest];
+
+  const results = await Promise.all(
+    finalOrder.map((id, index) =>
+      supabaseAdmin.from("landing_feed").update({ position: index }).eq("id", id)
+    )
+  );
+
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    console.error("Error reordering landing feed:", failed.error);
+    return { success: false, error: failed.error.message || "Failed to reorder the feed" };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Make sure the public landing-media bucket exists.
+ * Idempotent — safe to call before every upload.
+ */
+export async function ensureLandingMediaBucket(): Promise<boolean> {
+  const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+  if (buckets?.some((b) => b.name === LANDING_MEDIA_BUCKET)) return true;
+
+  const { error } = await supabaseAdmin.storage.createBucket(LANDING_MEDIA_BUCKET, {
+    public: true,
+  });
+
+  if (error) {
+    console.error("Error creating landing-media bucket:", error);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Store a feed poster and return its permanent public URL plus the storage
+ * path to clean up if the row write later fails.
+ *
+ * Takes bytes rather than a File so the same helper serves an artist upload
+ * and a thumbnail fetched from YouTube.
+ */
+export async function uploadLandingPoster(
+  objectName: string,
+  bytes: ArrayBuffer,
+  contentType: string
+): Promise<{ publicUrl: string | null; storagePath: string | null; error?: string }> {
+  // The object name becomes a path segment, so nothing may escape "feed/".
+  const safeName = objectName.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
+  const path = `feed/${safeName}`;
+
+  const { error } = await supabaseAdmin.storage
+    .from(LANDING_MEDIA_BUCKET)
+    .upload(path, bytes, { contentType, upsert: true });
+
+  if (error) {
+    console.error("Error uploading landing poster:", error);
+    return { publicUrl: null, storagePath: null, error: error.message || "Failed to upload the image" };
+  }
+
+  const { data } = supabaseAdmin.storage
+    .from(LANDING_MEDIA_BUCKET)
+    .getPublicUrl(path);
+
+  return { publicUrl: data.publicUrl, storagePath: path };
+}
+
+/** Best-effort removal of an orphaned poster after a failed write. */
+export async function removeLandingPoster(path: string): Promise<void> {
+  await supabaseAdmin.storage.from(LANDING_MEDIA_BUCKET).remove([path]);
+}
+
+/**
+
+/**
+ * Dimensions of an uploaded image, read from its own bytes, so the card's
+ * shape is always right and the artist never types numbers.
+ *
+ * JPEG and PNG only, matching what the upload route accepts. Returning null
+ * for anything else is deliberate: a wrong height would silently distort a
+ * card, which is worse than refusing the file with a clear message.
+ */
+export function readImageSize(
+  bytes: ArrayBuffer
+): { width: number; height: number } | null {
+  if (bytes.byteLength < 24) return null;
+  const view = new DataView(bytes);
+
+  // PNG: 8-byte signature, then the IHDR chunk holding big-endian uint32
+  // width/height at offsets 16 and 20.
+  if (view.getUint32(0) === 0x89504e47) {
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+
+  // JPEG: walk the segment markers to the first SOFn frame header.
+  if (view.getUint16(0) === 0xffd8) {
+    let offset = 2;
+    while (offset + 9 < bytes.byteLength) {
+      if (view.getUint8(offset) !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = view.getUint8(offset + 1);
+      // SOF0..SOF15, excluding DHT (c4), JPG (c8) and DAC (cc), which share
+      // that numeric range but carry no dimensions.
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: view.getUint16(offset + 5), width: view.getUint16(offset + 7) };
+      }
+      offset += 2 + view.getUint16(offset + 2);
+    }
+  }
+
+  return null;
 }

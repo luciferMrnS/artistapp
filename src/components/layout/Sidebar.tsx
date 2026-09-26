@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3, Siren } from "lucide-react";
+import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3, Siren, Images } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -11,13 +11,14 @@ import { getCreedLastRead } from "@/lib/creed-unread";
 import { setAppBadge } from "@/lib/app-badge";
 
 const navItems = [
-  { icon: Home, label: "Home", href: "/", artistOnly: false },
+  { icon: Home, label: "Home", href: "/community", artistOnly: false },
   { icon: MessageCircle, label: "Creed", href: "/fan-club", artistOnly: false },
   { icon: Bell, label: "Notifications", href: "/notifications", artistOnly: false },
   { icon: Mail, label: "Messages", href: "/messages", artistOnly: false },
   { icon: User, label: "Profile", href: "/profile", artistOnly: false },
   { icon: Siren, label: "Alert", href: "/alert", artistOnly: true },
   { icon: BarChart3, label: "Dashboard", href: "/dashboard", artistOnly: true },
+  { icon: Images, label: "Landing Feed", href: "/landing-feed", artistOnly: true },
 ];
 
 export function Sidebar() {
@@ -99,7 +100,7 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 flex h-screen w-20 flex-col border-r border-border bg-black p-4 xl:w-64">
-      <Link href="/" className="mb-8 block px-3" title="Kendrick David">
+      <Link href="/community" className="mb-8 block px-3" title="Kendrick David">
         <Logo className="h-12 w-12" />
       </Link>
 

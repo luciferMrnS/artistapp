@@ -94,7 +94,7 @@ export default function SignupPage() {
 
       // Project has confirmation disabled — logged in straight away
       setUser(data.user);
-      router.push("/");
+      router.push("/community");
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Signup error:", err);

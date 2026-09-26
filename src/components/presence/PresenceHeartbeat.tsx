@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 const HEARTBEAT_MS = 20_000;
 
@@ -11,7 +12,16 @@ const HEARTBEAT_MS = 20_000;
  * server's online window expires upstream.
  */
 export function PresenceHeartbeat() {
+  const { user, isLoading } = useAuth();
+  const userId = user?.id ?? null;
+
   useEffect(() => {
+    // Presence is per-account. Signed-out visitors have nothing to report and
+    // the endpoint can only answer 401, so don't spend the request on them —
+    // the public landing page is now the main entry point, so most arrivals
+    // here are anonymous.
+    if (isLoading || !userId) return;
+
     let timer: ReturnType<typeof setInterval> | undefined;
 
     const ping = () => {
@@ -49,7 +59,7 @@ export function PresenceHeartbeat() {
       window.removeEventListener("pageshow", onVisibility);
       stop();
     };
-  }, []);
+  }, [userId, isLoading]);
 
   return null;
 }

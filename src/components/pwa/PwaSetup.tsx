@@ -160,6 +160,7 @@ export function PwaSetup() {
       {showInstallButton && (
         <button
           onClick={handleInstall}
+          data-app-shell=""
           className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white shadow-lg shadow-primary/30 transition hover:opacity-90"
         >
           <Download className="h-4 w-4" /> Install app
@@ -167,7 +168,10 @@ export function PwaSetup() {
       )}
 
       {showPushChip && (
-        <div className="fixed bottom-6 left-6 z-50 flex items-center gap-2 rounded-full border border-border bg-zinc-900 px-4 py-3 text-sm text-white shadow-xl">
+        <div
+          data-app-shell=""
+          className="fixed bottom-6 left-6 z-50 flex items-center gap-2 rounded-full border border-border bg-zinc-900 px-4 py-3 text-sm text-white shadow-xl"
+        >
           <BellRing className="h-4 w-4 shrink-0 text-primary" />
           <span>Get notified when messages arrive</span>
           <button

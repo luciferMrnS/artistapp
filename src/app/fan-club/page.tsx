@@ -13,7 +13,7 @@ export default function FanClubPage() {
             <p className="text-sm text-secondary">Chat, share, and connect with fellow fans</p>
           </div>
           <Link
-            href="/"
+            href="/community"
             title="Back to home"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-secondary transition hover:border-primary/40 hover:text-white"
           >

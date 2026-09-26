@@ -56,7 +56,7 @@ export default async function StoryPage({
 
             <div className="mx-auto max-w-[680px] pb-10">
               <Link
-                href="/"
+                href="/community"
                 className="mt-5 inline-flex items-center gap-2 px-4 text-sm text-secondary transition hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" /> Back to feed

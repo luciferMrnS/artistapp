@@ -135,7 +135,7 @@ function HomeContent({
           <header className="sticky top-0 z-20 border-b border-border bg-black/80 backdrop-blur-md">
             <div className="mx-auto flex max-w-[680px] items-center justify-between px-4 py-4">
               <div className="flex items-center gap-3">
-                <Link href="/" title="Kendrick David">
+                <Link href="/community" title="Kendrick David">
                   <Logo className="h-10 w-10" />
                 </Link>
                 <div>
