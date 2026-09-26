@@ -14,7 +14,9 @@ import { MediaFeed } from "./components/MediaFeed";
 import { PlatformIcon } from "./components/PlatformIcon";
 import { Reveal } from "./components/Reveal";
 import { ScrollCta } from "./components/ScrollCta";
+import { StructuredData } from "./components/StructuredData";
 import { getLandingFeed } from "@/lib/db";
+import { absoluteUrl } from "@/lib/site";
 
 /* The artist edits the feed from /landing-feed, so the page has to be rendered
    per request. Without this the feed is captured at build time and a change
@@ -26,7 +28,6 @@ export const metadata: Metadata = {
      the name is already the first half of this title. */
   title: { absolute: `${ARTIST.name} | ${ARTIST.tagline}` },
   description: ARTIST.bio,
-  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: ARTIST.name,
@@ -48,6 +49,20 @@ export const metadata: Metadata = {
     description: ARTIST.bio,
     images: ["/landing/og-card.jpg"],
   },
+  /* The artist publishes here, so these are the URLs worth handing a crawler
+     instead of a bare handle. */
+  alternates: { canonical: absoluteUrl("/") },
+  keywords: [
+    "Kendrick David",
+    ARTIST.tagline,
+    "trap pop artist",
+    "trap music",
+    "pop music",
+    "independent artist",
+    "new music",
+    "official music video",
+    "visualizer",
+  ],
 };
 
 export default async function LandingPage() {
@@ -58,6 +73,7 @@ export default async function LandingPage() {
 
   return (
     <LandingGreeting portraitSrc={ARTIST.portrait.src}>
+      <StructuredData feed={feed} />
       <ScrollCta />
 
       <a

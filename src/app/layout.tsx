@@ -5,6 +5,7 @@ import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 import { PwaSetup } from "@/components/pwa/PwaSetup";
 import { SelfKeepAlive } from "@/components/SelfKeepAlive";
 import { ToastProvider } from "@/components/ui/Toast";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,9 +29,10 @@ const bangers = Bangers({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
-  ),
+  /* Resolves relative og:image and canonical URLs. Previously this fell back to
+     localhost whenever NEXT_PUBLIC_API_URL was unset, which is how production
+     ended up advertising localhost image URLs to social platforms. */
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Kendrick David | Artist Community",
     template: "%s | Kendrick David",
