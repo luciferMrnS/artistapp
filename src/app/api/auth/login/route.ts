@@ -6,7 +6,7 @@ import {
   markEmailVerified,
   createUnverifiedUser,
 } from "@/lib/db";
-import { createToken } from "@/lib/server-auth";
+import { createToken, sessionCookieOptions } from "@/lib/server-auth";
 import { createAnonAuthClient } from "@/lib/supabase-auth-client";
 import type { StoredUser } from "@/lib/db";
 
@@ -151,13 +151,9 @@ function issueSession(user: StoredUser) {
     { status: 200 }
   );
 
-  response.cookies.set("auth-token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60,
-    path: "/",
-  });
+  /* Same options the sliding renewal uses, so a session renewed later is
+     indistinguishable from the one issued here. */
+  response.cookies.set("auth-token", token, sessionCookieOptions());
 
   return response;
 }
