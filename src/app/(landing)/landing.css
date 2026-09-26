@@ -54,6 +54,15 @@ html[data-theme="light"] [data-app-shell] {
   color: #2e2e2e;
 }
 
+/* The compensation above is a negative margin, which is the wrong tool as the
+   trailing item of a `justify-content: space-between` row: flex positions that
+   item by its margin box, so the element lands 0.38rem *outside* the row — a
+   real 6px overflow at 0.5625rem, measured on every feed card. Dropped there,
+   kept everywhere else. */
+.lp-meta > .lp-eyebrow:last-child {
+  margin-right: 0;
+}
+
 .lp-display {
   font-family: var(--lp-display);
   font-weight: 400;
@@ -75,6 +84,26 @@ html[data-theme="light"] [data-app-shell] {
   text-transform: uppercase;
   letter-spacing: 0.4rem;
   padding-left: calc(0.4rem + var(--lp-pad, 1.875rem));
+}
+
+/* A touch visitor has no hover and a fingertip rather than a cursor, so the
+   10px tracked caps in the footer are a 12px-tall target against a ~44px
+   minimum. The small type is the design, so the hit area grows instead of the
+   type — and `min-height` needs a non-inline display to apply at all, which is
+   why this is not just a padding tweak. */
+@media (hover: none) {
+  .lp-ui {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* 37px tall — wide enough to hit, but under the 44px minimum. Both are
+     already inline-flex with centred content, so min-height is enough and the
+     padding (and therefore the desktop density) is left alone. */
+  .lp-chip {
+    min-height: 44px;
+  }
 }
 
 /* --- Surfaces ------------------------------------------------------------ */
@@ -118,7 +147,16 @@ html[data-theme="light"] [data-app-shell] {
   letter-spacing: 0.4rem;
   padding: 1.375rem 2.5rem;
   padding-left: calc(0.4rem + 2.5rem);
-  white-space: nowrap;
+  /* `nowrap` is what made this a fixed-width object: "Join The Creed Community"
+     measures 418px with the tracking and padding above, which is wider than a
+     320px phone. As a flex/grid item its min-width is auto, so it could not
+     shrink — it set the page's minimum width and the whole hero was clipped
+     off-screen by the layout's overflow-x-hidden. Letting the label wrap keeps
+     the pill inside the screen; on desktop there is room, so it stays on one
+     line exactly as before. */
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
   transition:
     transform 0.25s ease,
     background-color 0.25s ease,

@@ -107,7 +107,7 @@ export function MediaFeed({ items }: { items: MediaItem[] }) {
                 </span>
               </button>
 
-              <span className="mt-3 flex items-baseline justify-between gap-3">
+              <span className="lp-meta mt-3 flex items-baseline justify-between gap-3">
                 <Link
                   href={`/music/${item.id}`}
                   className="lp-body truncate text-[0.95rem] leading-none text-[#262626] underline decoration-black/15 underline-offset-[5px] transition hover:decoration-black/50"
