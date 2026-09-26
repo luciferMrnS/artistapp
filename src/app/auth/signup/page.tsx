@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight, AlertCircle, UserCheck, Home, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { COMMUNITY_ROUTE } from "@/lib/site";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -94,7 +95,7 @@ export default function SignupPage() {
 
       // Project has confirmation disabled — logged in straight away
       setUser(data.user);
-      router.push("/community");
+      router.push(COMMUNITY_ROUTE);
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Signup error:", err);
@@ -118,7 +119,7 @@ export default function SignupPage() {
             Click it to activate your account.
           </p>
           <p className="mt-3 text-xs text-secondary/80">
-            Don't see it? It may take a few minutes — check your{" "}
+            Don&apos;t see it? It may take a few minutes — check your{" "}
             <span className="font-semibold text-secondary">spam</span> or{" "}
             <span className="font-semibold text-secondary">promotions</span>{" "}
             folder.
