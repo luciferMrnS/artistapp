@@ -27,6 +27,16 @@ export function absoluteUrl(path: string): string {
 }
 
 /**
+ * Where a signed-in account belongs.
+ *
+ * Single source on purpose. /auth/login and /auth/signup already sent people
+ * here after authenticating, and the landing page now sends a returning fan
+ * here from the site root; if those were separate literals they could drift
+ * and strand a signed-in user on the marketing page.
+ */
+export const COMMUNITY_ROUTE = "/community";
+
+/**
  * Routes only a signed-in account should reach. They are all auth-guarded, so
  * this is crawl hygiene rather than access control - but there is no reason to
  * spend crawl budget on them, and indexing a login page is a bad look.
@@ -41,5 +51,5 @@ export const PRIVATE_PATHS = [
   "/profile",
   "/alert",
   "/fan-club",
-  "/community",
+  COMMUNITY_ROUTE,
 ];

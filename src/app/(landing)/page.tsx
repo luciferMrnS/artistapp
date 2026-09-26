@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowDown, Mail } from "lucide-react";
 import {
   ARTIST,
@@ -16,7 +17,8 @@ import { Reveal } from "./components/Reveal";
 import { ScrollCta } from "./components/ScrollCta";
 import { StructuredData } from "./components/StructuredData";
 import { getLandingFeed } from "@/lib/db";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, COMMUNITY_ROUTE } from "@/lib/site";
+import { getCurrentUser } from "@/lib/server-auth";
 
 /* The artist edits the feed from /landing-feed, so the page has to be rendered
    per request. Without this the feed is captured at build time and a change
@@ -66,6 +68,31 @@ export const metadata: Metadata = {
 };
 
 export default async function LandingPage() {
+  /* This page is the anonymous front door: the marketing surface, and the
+     thing search engines and link previews are meant to see. A registered fan
+     has no use for it once they are signed in - /auth/login and
+     /auth/signup already send people to the community afterwards - so a
+     returning fan opening the site root, a bookmark or the installed PWA is
+     sent straight to their feed instead of being made to click past the
+     poster again.
+
+     Scoped to fans. The artist is deliberately left on this page: it is
+     theirs, they edit the copy and the feed behind /landing-feed, and bouncing
+     them off it would make it impossible to preview what they publish.
+
+     Safe for the page's own SEO. The condition is a signed cookie, and no
+     crawler or unfurl bot sends one, so / keeps serving the landing page with
+     its canonical, JSON-LD and OG tags to everything that indexes it. The
+     destination is in PRIVATE_PATHS, so it is noindex and absent from the
+     sitemap and cannot end up indexed in /'s place.
+
+     redirect() works by throwing, so it has to stay outside any try/catch and
+     ahead of the work below. */
+  const user = await getCurrentUser();
+  if (user?.role === "fan") {
+    redirect(COMMUNITY_ROUTE);
+  }
+
   /* The artist edits this feed from /landing-feed. It falls back to the static
      copy in lib/landing-feed.ts when the table hasn't been created yet, and is
      re-read on every visit, so a change shows up without a redeploy. */

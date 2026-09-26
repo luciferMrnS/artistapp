@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight, AlertCircle, MailCheck, CheckCircle2, Home, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { COMMUNITY_ROUTE } from "@/lib/site";
 
 type PasswordNotice = { kind: "changed" | "confirmFailed"; text: string } | null;
 
@@ -84,7 +85,7 @@ export default function LoginPage() {
       // Update auth context
       setUser(data.user);
       // Redirect to home
-      router.push("/community");
+      router.push(COMMUNITY_ROUTE);
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error("Login error:", err);
