@@ -99,6 +99,36 @@ function describeItem(item: MediaItem): string {
   return parts.join(" · ");
 }
 
+/**
+ * The pixel size for a poster preview.
+ *
+ * A fixed `h-* w-*` box plus `aspect-ratio` does not work: CSS ignores
+ * `aspect-ratio` when both dimensions are definite, so the ratio was silently
+ * dropped and `object-cover` cropped every poster to landscape - a 844x1503
+ * visualizer became an unrecognisable horizontal slice. Deriving the width
+ * from the height and the poster's own ratio keeps the true shape, and
+ * `object-contain` on the image means nothing is ever cut.
+ */
+function previewSize(
+  width: number,
+  height: number,
+  boxHeight: number,
+  maxWidth: number
+): { width: number; height: number } {
+  const ratio =
+    Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+      ? width / height
+      : 16 / 9;
+  /* The floor only guards legibility for a pathologically narrow poster - a
+     844x1503 visualizer lands on 31px, which is too thin to read, so 32 is
+     the smallest width worth showing. `object-contain` pads the remainder
+     rather than cutting anything. */
+  return {
+    width: Math.round(Math.min(maxWidth, Math.max(32, boxHeight * ratio))),
+    height: boxHeight,
+  };
+}
+
 export function FeedEditor({
   initialItems,
   ready,
@@ -487,19 +517,22 @@ export function FeedEditor({
           <div className="flex flex-wrap items-center gap-4">
             {draft.posterUrl ? (
               <div
-                className="relative h-24 w-40 shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-950"
-                style={{ aspectRatio: `${draft.posterWidth} / ${draft.posterHeight}` }}
+                className="relative shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-950"
+                style={previewSize(draft.posterWidth, draft.posterHeight, 96, 200)}
               >
                 <Image
                   src={draft.posterUrl}
                   alt=""
                   fill
-                  sizes="160px"
-                  className="object-cover"
+                  sizes="200px"
+                  className="object-contain"
                 />
               </div>
             ) : (
-              <div className="flex h-24 w-40 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-xs text-secondary">
+              <div
+                className="flex shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-xs text-secondary"
+                style={{ width: 200, height: 96 }}
+              >
                 No poster yet
               </div>
             )}
@@ -593,15 +626,15 @@ export function FeedEditor({
                 </div>
 
                 <div
-                  className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-zinc-950"
-                  style={{ aspectRatio: `${item.poster.width} / ${item.poster.height}` }}
+                  className="shrink-0 overflow-hidden rounded-lg border border-border bg-zinc-950"
+                  style={previewSize(item.poster.width, item.poster.height, 56, 120)}
                 >
                   <Image
                     src={item.poster.src}
                     alt=""
                     fill
-                    sizes="80px"
-                    className="object-cover"
+                    sizes="120px"
+                    className="object-contain"
                   />
                 </div>
 
