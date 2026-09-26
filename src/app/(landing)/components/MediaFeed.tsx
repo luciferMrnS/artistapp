@@ -3,7 +3,12 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, X } from "lucide-react";
-import { embedSrc, tileRatio, type MediaItem } from "@/lib/landing-feed";
+import {
+  embedSrc,
+  posterFitsTile,
+  tileRatio,
+  type MediaItem,
+} from "@/lib/landing-feed";
 
 /**
  * The picture + video feed.
@@ -79,7 +84,14 @@ export function MediaFeed({ items }: { items: MediaItem[] }) {
                   width={item.poster.width}
                   height={item.poster.height}
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="h-full w-full object-cover"
+                  /* A poster too tall for its tile is letterboxed against the
+                      frame's own background rather than cropped, so the
+                      artwork is always shown whole. */
+                  className={`h-full w-full ${
+                    posterFitsTile(item.poster.width, item.poster.height)
+                      ? "object-cover"
+                      : "object-contain"
+                  }`}
                 />
                 <span className="lp-play" aria-hidden="true">
                   <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-[#262626] shadow-xl transition-transform duration-300 group-hover:scale-110">

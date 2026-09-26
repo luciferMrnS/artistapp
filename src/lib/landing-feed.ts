@@ -29,13 +29,22 @@ export type Poster = {
  * 199px neighbours. One thumbnail, and the grid stopped reading as a grid.
  *
  * Clamping to square..16:9 keeps the variety while bounding the tallest card to
- * the width of its column. Anything outside the range is cropped by the tile's
- * object-fit; the uncropped poster is still shown in the modal, which uses
- * object-contain. Replacing the file with a squarer crop is the other fix, but
- * that is the artist's call — the layout should not depend on it.
+ * the width of its column. A poster outside that range is letterboxed rather
+ * than cropped — see {@link posterFitsTile} — so the artwork is never cut, and
+ * replacing the file with a squarer crop stays the artist's option rather than
+ * a layout requirement.
  */
 export const MIN_TILE_RATIO = 1;
 export const MAX_TILE_RATIO = 16 / 9;
+
+/** True when a poster's own ratio can fill a tile with no letterbox and no crop. */
+export function posterFitsTile(width: number, height: number): boolean {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return false;
+  }
+  const ratio = width / height;
+  return ratio >= MIN_TILE_RATIO && ratio <= MAX_TILE_RATIO;
+}
 
 /** A tile's aspect ratio, clamped to {@link MIN_TILE_RATIO}..{@link MAX_TILE_RATIO}. */
 export function tileRatio(width: number, height: number): number {
