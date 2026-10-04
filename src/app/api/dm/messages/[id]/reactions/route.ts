@@ -3,12 +3,46 @@ import {
   addDirectMessageReaction,
   removeDirectMessageReaction,
   getDirectMessageReactionsFor,
+  getDirectMessageReactionDetails,
   getDirectMessageById,
   findUserById,
   type MessageReaction,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 import { sendInteractionPush } from "@/lib/push";
+
+/**
+ * GET /api/dm/messages/[id]/reactions
+ * Who reacted with each emoji — powers the hover / long-press tooltip.
+ * Only participants of the conversation may read.
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const { id: messageId } = await params;
+    const target = await getDirectMessageById(messageId);
+    if (!target) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+    if (target.sender_id !== user.userId && target.recipient_id !== user.userId) {
+      return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+    }
+    const details = await getDirectMessageReactionDetails(messageId);
+    return NextResponse.json({ success: true, details }, { status: 200 });
+  } catch (error) {
+    console.error("DM reaction details error:", error);
+    return NextResponse.json(
+      { error: "Failed to load reactions" },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/dm/messages/[id]/reactions

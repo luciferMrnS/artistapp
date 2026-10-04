@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Plus, Check, Pencil, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X, Image as ImageIcon } from "lucide-react";
+import { Send, Plus, Check, Copy, Pencil, Loader2, MessageCircle, Search, EyeOff, Smile, ArrowLeft, Reply, X, Image as ImageIcon } from "lucide-react";
+import { copyTextToClipboard } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
@@ -13,6 +14,7 @@ import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 import { useJumpToBottom } from "@/hooks/useJumpToBottom";
 import { useScrollToMessage } from "@/hooks/useScrollToMessage";
 import { JumpToLatest } from "@/components/ui/JumpToLatest";
+import { WhoReacted } from "@/components/ui/ReactionWhoReacted";
 import { uploadWithProgress, uploadErrorOf } from "@/lib/upload";
 import { UploadProgress } from "@/components/ui/UploadProgress";
 import { Lightbox } from "@/components/ui/Lightbox";
@@ -232,25 +234,44 @@ function DmBubble({
               </button>
             ) : null}
 
-            <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+            <span className="select-text whitespace-pre-wrap break-words">{msg.content}</span>
 
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => (
-                  <button
+                  <WhoReacted
                     key={r.emoji}
-                    type="button"
-                    onClick={() => toggleReaction(msg.id, r.emoji)}
-                    className={cn(
-                      "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
-                      r.me
-                        ? "border-primary bg-primary/30 text-white"
-                        : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
-                    )}
+                    title={r.emoji}
+                    loadUsers={async () => {
+                      try {
+                        const res = await fetch(`/api/dm/messages/${msg.id}/reactions`, {
+                          credentials: "include",
+                        });
+                        if (!res.ok) return [];
+                        const data = await res.json();
+                        const detail = (data.details ?? []).find(
+                          (d: { emoji: string }) => d.emoji === r.emoji
+                        );
+                        return detail?.users ?? [];
+                      } catch {
+                        return [];
+                      }
+                    }}
                   >
-                    <span>{r.emoji}</span>
-                    <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleReaction(msg.id, r.emoji)}
+                      className={cn(
+                        "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
+                        r.me
+                          ? "border-primary bg-primary/30 text-white"
+                          : "border-white/15 bg-white/10 text-secondary hover:bg-white/20"
+                      )}
+                    >
+                      <span>{r.emoji}</span>
+                      <span className={r.me ? "text-white" : "text-secondary"}>{r.count}</span>
+                    </button>
+                  </WhoReacted>
                 ))}
               </div>
             )}
@@ -268,11 +289,12 @@ function DmBubble({
         </p>
       </div>
 
-      {mine && !deleted && !disabled && (
+      {!deleted && !disabled && (mine || (!msg.media_url && msg.content)) && (
         <KebabMenu
           placement="top"
-          deleteLabel="Delete message"
-          onDelete={() => onDeleteMessage(msg)}
+          copyText={!msg.media_url && msg.content ? msg.content : undefined}
+          deleteLabel={mine ? "Delete message" : undefined}
+          onDelete={mine ? () => onDeleteMessage(msg) : undefined}
           editLabel={editable ? "Edit message" : undefined}
           onEdit={editable ? () => onEdit(msg) : undefined}
         />
@@ -339,7 +361,17 @@ export function DirectMessages() {
   const [convoError, setConvoError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DMChat | null>(null);
   const [reactFor, setReactFor] = useState<DMChat | null>(null);
+  const [reactCopied, setReactCopied] = useState(false);
   const [editingMsg, setEditingMsg] = useState<DMChat | null>(null);
+
+  const copyReactMessage = useCallback(async () => {
+    if (!reactFor || reactFor.media_url || !reactFor.content) return;
+    const ok = await copyTextToClipboard(reactFor.content);
+    if (ok) {
+      setReactCopied(true);
+      setTimeout(() => setReactCopied(false), 1500);
+    }
+  }, [reactFor]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1052,13 +1084,29 @@ export function DirectMessages() {
                     <span className="text-xs font-semibold text-secondary">
                       React to {reactFor.sender_id === user?.id ? "your message" : active.recipient.username}
                     </span>
-                    <button
-                      onClick={() => setReactFor(null)}
-                      className="rounded-full p-1 text-secondary transition hover:bg-white/10"
-                      aria-label="Close reactions"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {!reactFor.media_url && reactFor.content && (
+                        <button
+                          onClick={copyReactMessage}
+                          className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-secondary transition hover:bg-white/10 hover:text-white"
+                          aria-label="Copy message text"
+                        >
+                          {reactCopied ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                          {reactCopied ? "Copied!" : "Copy"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setReactFor(null)}
+                        className="rounded-full p-1 text-secondary transition hover:bg-white/10"
+                        aria-label="Close reactions"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-8 gap-1">
                     {QUICK_REACTS.map((emoji) => (

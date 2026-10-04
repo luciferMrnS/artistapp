@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { WhoReacted } from "@/components/ui/ReactionWhoReacted";
 
 interface LikeButtonProps {
   postId: string;
@@ -67,7 +68,24 @@ export function LikeButton({
     }
   };
 
+  const loadLikers = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/posts/${postId}/likes`, {
+        credentials: "include",
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return ((data.likes ?? []) as { user?: { id: string; username: string; avatar?: string | null } }[])
+        .map((l) => l.user)
+        .filter((u): u is { id: string; username: string; avatar?: string | null } => Boolean(u?.id))
+        .map((u) => ({ id: u.id, username: u.username, avatar: u.avatar ?? null }));
+    } catch {
+      return [];
+    }
+  }, [postId]);
+
   return (
+    <WhoReacted loadUsers={loadLikers} title="❤ Liked by">
     <button
       onClick={toggleLike}
       disabled={isAnimating}
@@ -93,5 +111,6 @@ export function LikeButton({
       </div>
       <span className="text-sm">{count}</span>
     </button>
+    </WhoReacted>
   );
 }

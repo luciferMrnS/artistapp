@@ -26,6 +26,8 @@ export interface PostProps {
   comments: number;
   timestamp: string;
   userLiked?: boolean;
+  /** Expand + scroll to the comments (comment notification deep-link). */
+  focusComments?: boolean;
 }
 
 export function Post({
@@ -37,6 +39,7 @@ export function Post({
   comments: initialComments,
   timestamp,
   userLiked = false,
+  focusComments = false,
 }: PostProps) {
   const { user } = useAuth();
   const [likes, setLikes] = useState(initialLikes);
@@ -145,6 +148,7 @@ export function Post({
               postId={id}
               initialComments={comments}
               onCommentCountChange={handleCommentCountChange}
+              autoExpand={focusComments}
             />
           </div>
           <button className="text-secondary hover:text-primary p-2 rounded-full hover:bg-primary/10 transition-colors">

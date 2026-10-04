@@ -13,6 +13,8 @@ interface CommentSectionProps {
   postId: string;
   initialComments: number;
   onCommentCountChange: (count: number) => void;
+  /** When true (e.g. arriving from a comment notification), expand + scroll here on mount. */
+  autoExpand?: boolean;
 }
 
 interface CommentData {
@@ -33,15 +35,45 @@ export function CommentSection({
   postId,
   initialComments,
   onCommentCountChange,
+  autoExpand = false,
 }: CommentSectionProps) {
   const { user } = useAuth();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(autoExpand);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentCount, setCommentCount] = useState(initialComments);
   const [inputValue, setInputValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [highlight, setHighlight] = useState(autoExpand);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  // Deep-link from a comment notification: load the thread, scroll it into
+  // view, and flash a highlight so the source is obvious.
+  React.useEffect(() => {
+    if (!autoExpand) return;
+    let cancelled = false;
+    setIsLoadingComments(true);
+    fetch(`/api/posts/${postId}/comments`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data.comments) setComments(data.comments);
+      })
+      .catch((error) => console.error("Failed to load comments:", error))
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingComments(false);
+        requestAnimationFrame(() => {
+          sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        setTimeout(() => {
+          if (!cancelled) setHighlight(false);
+        }, 2400);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [autoExpand, postId]);
 
   const emojiPanelRef = useRef<HTMLDivElement>(null);
   const emojiToggleRef = useRef<HTMLButtonElement>(null);
@@ -111,7 +143,14 @@ export function CommentSection({
   };
 
   return (
-    <div className="w-full">
+    <div
+      ref={sectionRef}
+      id="comments"
+      className={cn(
+        "w-full scroll-mt-24 rounded-xl transition-shadow",
+        highlight && "ring-2 ring-primary shadow-[0_0_24px_rgba(29,155,240,0.35)]"
+      )}
+    >
       <button
         onClick={toggleExpanded}
         className={cn(

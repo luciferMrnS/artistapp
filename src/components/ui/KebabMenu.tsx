@@ -1,26 +1,30 @@
 "use client";
 
 import React, { useState } from "react";
-import { Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { copyTextToClipboard } from "@/lib/copy-text";
 
 interface KebabMenuProps {
-  /** Label of the delete action, e.g. "Delete post" */
-  deleteLabel: string;
+  /** Label of the delete action, e.g. "Delete post". Omit to hide delete. */
+  deleteLabel?: string;
   /** Shown on the first delete click before confirming */
   confirmLabel?: string;
   /** Resolves true when the deletion succeeded */
-  onDelete: () => Promise<boolean>;
+  onDelete?: () => Promise<boolean>;
   /** Optional edit action (shown above delete). Leave unset to hide it. */
   editLabel?: string;
   /** Runs when the edit action is selected */
   onEdit?: () => void;
+  /** Plain text to offer a "Copy" action for. Omit to hide it. */
+  copyText?: string | null;
   /** Which side of the trigger the menu drops out to */
   placement?: "bottom" | "top";
 }
 
 /**
- * Three-dot menu with an optional edit action and a two-step delete action.
+ * Three-dot menu with optional copy / edit actions and a two-step delete.
  * First click on delete arms the confirm state; second click runs `onDelete`.
+ * Copy writes `copyText` to the clipboard and flashes a "Copied" tick.
  */
 export function KebabMenu({
   deleteLabel,
@@ -28,11 +32,13 @@ export function KebabMenu({
   onDelete,
   editLabel = "Edit",
   onEdit,
+  copyText,
   placement = "bottom",
 }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const toggle = () => {
     setOpen((o) => !o);
@@ -47,8 +53,17 @@ export function KebabMenu({
     onEdit?.();
   };
 
+  const handleCopyClick = async () => {
+    if (!copyText) return;
+    const ok = await copyTextToClipboard(copyText);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
   const handleDeleteClick = async () => {
-    if (!open) return;
+    if (!open || !onDelete) return;
     if (!confirming) {
       setConfirming(true);
       return;
@@ -95,6 +110,21 @@ export function KebabMenu({
               : "top-full mt-1"
           }`}
         >
+          {copyText ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleCopyClick}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-secondary transition-colors hover:bg-primary/10 hover:text-primary"
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {copied ? "Copied!" : "Copy text"}
+            </button>
+          ) : null}
           {onEdit && (
             <button
               type="button"
@@ -106,19 +136,21 @@ export function KebabMenu({
               {editLabel}
             </button>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={handleDeleteClick}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
-          >
-            {deleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-            {deleting ? "Deleting..." : confirming ? confirmLabel : deleteLabel}
-          </button>
+          {onDelete && deleteLabel && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleDeleteClick}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              {deleting ? "Deleting..." : confirming ? confirmLabel : deleteLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

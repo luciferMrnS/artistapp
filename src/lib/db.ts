@@ -3315,6 +3315,64 @@ export async function removeDirectMessageReaction(
   return updated[messageId] ?? [];
 }
 
+export interface ReactionUser {
+  id: string;
+  username: string;
+  avatar: string | null;
+}
+
+export interface ReactionDetail {
+  emoji: string;
+  count: number;
+  users: ReactionUser[];
+}
+
+/**
+ * Who reacted with each emoji on a single DM — used for the
+ * hover / long-press "who reacted" tooltip. Returns one entry
+ * per emoji with the reacting users (capped at 50 per emoji).
+ */
+export async function getDirectMessageReactionDetails(
+  messageId: string
+): Promise<ReactionDetail[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("direct_message_reactions")
+      .select(
+        "emoji, user:users!direct_message_reactions_user_id_fkey (id, username, avatar)"
+      )
+      .eq("message_id", messageId);
+
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching DM reaction details:", error);
+      return [];
+    }
+
+    const grouped = new Map<string, ReactionUser[]>();
+    for (const row of (data ?? []) as unknown as {
+      emoji: string;
+      user: ReactionUser | ReactionUser[] | null;
+    }[]) {
+      const raw = row.user;
+      const u = Array.isArray(raw) ? raw[0] : raw;
+      if (!u) continue;
+      const list = grouped.get(row.emoji) ?? [];
+      if (list.length < 50) list.push(u);
+      grouped.set(row.emoji, list);
+    }
+
+    return [...grouped.entries()].map(([emoji, users]) => ({
+      emoji,
+      count: users.length,
+      users,
+    }));
+  } catch (err) {
+    console.error("getDirectMessageReactionDetails error:", err);
+    return [];
+  }
+}
+
 /**
  * Mark all of the user's messages in a conversation as read
  */
@@ -3728,6 +3786,52 @@ export async function removeMessageReaction(
 
   const updated = await getMessageReactionsFor([messageId], userId);
   return updated[messageId] ?? [];
+}
+
+/**
+ * Who reacted with each emoji on a single community message —
+ * used for the hover / long-press "who reacted" tooltip. Returns
+ * one entry per emoji with the reacting users (capped at 50 per emoji).
+ */
+export async function getMessageReactionDetails(
+  messageId: string
+): Promise<ReactionDetail[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("message_reactions")
+      .select(
+        "emoji, user:users!message_reactions_user_id_fkey (id, username, avatar)"
+      )
+      .eq("message_id", messageId);
+
+    if (error) {
+      if (isTableMissing(error)) return [];
+      console.error("Error fetching reaction details:", error);
+      return [];
+    }
+
+    const grouped = new Map<string, ReactionUser[]>();
+    for (const row of (data ?? []) as unknown as {
+      emoji: string;
+      user: ReactionUser | ReactionUser[] | null;
+    }[]) {
+      const raw = row.user;
+      const u = Array.isArray(raw) ? raw[0] : raw;
+      if (!u) continue;
+      const list = grouped.get(row.emoji) ?? [];
+      if (list.length < 50) list.push(u);
+      grouped.set(row.emoji, list);
+    }
+
+    return [...grouped.entries()].map(([emoji, users]) => ({
+      emoji,
+      count: users.length,
+      users,
+    }));
+  } catch (err) {
+    console.error("getMessageReactionDetails error:", err);
+    return [];
+  }
 }
 
 /**

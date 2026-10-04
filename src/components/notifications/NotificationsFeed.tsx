@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   MessageCircle,
@@ -34,11 +34,44 @@ const typeConfig = {
   mention: { icon: AtSign, color: "text-orange-400" },
 } as const;
 
+/**
+ * Where a notification click should land:
+ * - like / comment / post → the source post (comments auto-expand for comment)
+ * - follow → the artist dashboard subscribers list (recipient is the followed artist)
+ * - mention → the Creed chat where the mention happened
+ */
+function destinationFor(n: NotificationWithActor): string | null {
+  if (n.post_id) {
+    return n.type === "comment"
+      ? `/post/${n.post_id}?focus=comments`
+      : `/post/${n.post_id}`;
+  }
+  if (n.type === "follow") return "/dashboard";
+  if (n.type === "mention") return "/fan-club";
+  return null;
+}
+
 export function NotificationsFeed() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationWithActor[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const markedReadRef = useRef(false);
+
+  const openNotification = (n: NotificationWithActor) => {
+    const href = destinationFor(n);
+    if (!href) return;
+    // Mark this one read (best-effort) and update the row optimistically.
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === n.id ? { ...item, read: true } : item))
+    );
+    fetch("/api/notifications/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: n.id }),
+    }).catch(() => undefined);
+    router.push(href);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +139,27 @@ export function NotificationsFeed() {
       {notifications.map((notification, index) => {
         const config = typeConfig[notification.type];
         const Icon = config.icon;
+        const href = destinationFor(notification);
         return (
           <div
             key={notification.id}
+            role={href ? "link" : undefined}
+            tabIndex={href ? 0 : undefined}
+            aria-label={href ? "Open notification source" : undefined}
+            onClick={href ? () => openNotification(notification) : undefined}
+            onKeyDown={
+              href
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openNotification(notification);
+                    }
+                  }
+                : undefined
+            }
             className={`flex items-start gap-3 border-b border-border px-4 py-4 ${
               index % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30"
-            }`}
+            } ${href ? "cursor-pointer transition-colors hover:bg-white/5 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary" : ""}`}
           >
             <div
               className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 ${config.color}`}
@@ -121,6 +169,12 @@ export function NotificationsFeed() {
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-sm text-white">
+                {!notification.read && (
+                  <span
+                    aria-label="Unread"
+                    className="h-2 w-2 shrink-0 rounded-full bg-primary"
+                  />
+                )}
                 {notification.actor && (
                   <img
                     src={resolveAvatarUrl(notification.actor.avatar)}
@@ -128,30 +182,22 @@ export function NotificationsFeed() {
                     className="h-5 w-5 rounded-full object-cover"
                   />
                 )}
-                <UserDmLink
-                  userId={notification.actor?.id ?? ""}
-                  username={notification.actor?.username ?? "Someone"}
-                  className="truncate font-semibold text-white"
-                />
+                {/* Username opens a DM — must not trigger the row navigation. */}
+                <span onClick={(e) => e.stopPropagation()}>
+                  <UserDmLink
+                    userId={notification.actor?.id ?? ""}
+                    username={notification.actor?.username ?? "Someone"}
+                    className="truncate font-semibold text-white"
+                  />
+                </span>
               </div>
-              <Link
-                href={
-                  notification.type === "mention"
-                    ? "/fan-club"
-                    : notification.post_id
-                      ? `/post/${notification.post_id}`
-                      : "#"
-                }
-                className="mt-1 block"
-              >
-                <p className="text-sm text-secondary">
-                  {notification.type === "like" && "liked your post"}
-                  {notification.type === "comment" && "commented on your post"}
-                  {notification.type === "follow" && "started following you"}
-                  {notification.type === "post" && "posted something new"}
-                  {notification.type === "mention" && "mentioned you in Creed"}
-                </p>
-              </Link>
+              <p className="mt-1 block text-sm text-secondary">
+                {notification.type === "like" && "liked your post"}
+                {notification.type === "comment" && "commented on your post"}
+                {notification.type === "follow" && "started following you"}
+                {notification.type === "post" && "posted something new"}
+                {notification.type === "mention" && "mentioned you in Creed"}
+              </p>
             </div>
 
             <span className="shrink-0 text-xs text-secondary/70">

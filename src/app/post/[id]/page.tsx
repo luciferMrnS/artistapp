@@ -22,10 +22,14 @@ function formatTimeDifference(date: string): string {
 
 export default async function PostPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ focus?: string }>;
 }) {
   const { id } = await params;
+  const focus = (await searchParams)?.focus;
+  const focusComments = focus === "comments";
 
   const cookieStore = await cookies();
   const token = cookieStore.get("auth-token")?.value;
@@ -70,6 +74,7 @@ export default async function PostPage({
                 comments={post.comments_count}
                 timestamp={formatTimeDifference(post.created_at)}
                 userLiked={userLiked}
+                focusComments={focusComments}
               />
             </div>
           </main>

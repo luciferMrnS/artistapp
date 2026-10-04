@@ -3,12 +3,39 @@ import {
   addMessageReaction,
   removeMessageReaction,
   getMessageReactionsFor,
+  getMessageReactionDetails,
   getMessageById,
   findUserById,
   type MessageReaction,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 import { sendInteractionPush } from "@/lib/push";
+
+/**
+ * GET /api/messages/[id]/reactions
+ * Who reacted with each emoji — powers the hover / long-press tooltip.
+ * Any authenticated user may read (same visibility as the chat itself).
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const { id: messageId } = await params;
+    const details = await getMessageReactionDetails(messageId);
+    return NextResponse.json({ success: true, details }, { status: 200 });
+  } catch (error) {
+    console.error("Reaction details error:", error);
+    return NextResponse.json(
+      { error: "Failed to load reactions" },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/messages/[id]/reactions
