@@ -12,6 +12,7 @@ import { KebabMenu } from "@/components/ui/KebabMenu";
 import { Lightbox } from "@/components/ui/Lightbox";
 import { markCreedRead } from "@/lib/creed-unread";
 import { UserDmLink } from "@/components/dm/UserDmLink";
+import { RichText } from "@/components/ui/RichText";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
 import { useJumpToBottom } from "@/hooks/useJumpToBottom";
@@ -93,33 +94,9 @@ function detectMention(
 }
 
 /**
- * Split a message body into text and `@username` tokens so mentions can be
- * highlighted. Any @-token is styled — typed names work too even if they
- * don't match a real account.
+ * Message body rendering (links + @mentions) lives in
+ * `src/components/ui/RichText.tsx` so Creed and DMs share it.
  */
-function renderMentionContent(content: string) {
-  const parts = content.split(/(@[\w.]+)/g);
-  return parts.map((part, i) => {
-    if (/^@[\w.]+$/i.test(part)) {
-      if (part.toLowerCase() === "@all") {
-        return (
-          <span
-            key={i}
-            className="rounded-md bg-red-500/20 px-1.5 py-0.5 font-bold text-red-400 ring-1 ring-red-500/50"
-          >
-            {part}
-          </span>
-        );
-      }
-      return (
-        <span key={i} className="font-semibold text-red-500">
-          {part}
-        </span>
-      );
-    }
-    return <React.Fragment key={i}>{part}</React.Fragment>;
-  });
-}
 
 /** Fire `onLongPress` when a pointer is held still for `ms`. */
 function useLongPress(onLongPress: () => void, ms = 450) {
@@ -301,7 +278,14 @@ function MessageRow({
                   />
                 </button>
               ) : (
-                <span className="select-text whitespace-pre-wrap break-words">{renderMentionContent(msg.content)}</span>
+                <RichText
+                  content={msg.content}
+                  linkClassName={
+                    isMine
+                      ? "text-white underline decoration-white/70 hover:decoration-white"
+                      : "text-sky-400 hover:text-sky-300"
+                  }
+                />
               )}
             </div>
 

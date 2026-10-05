@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { UserDmLink } from "@/components/dm/UserDmLink";
+import { RichText } from "@/components/ui/RichText";
 import { EmojiPicker } from "@/components/ui/EmojiPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDismissOnClickOutside } from "@/hooks/useDismissOnClickOutside";
@@ -234,7 +235,14 @@ function DmBubble({
               </button>
             ) : null}
 
-            <span className="select-text whitespace-pre-wrap break-words">{msg.content}</span>
+            <RichText
+              content={msg.content}
+              linkClassName={
+                mine
+                  ? "text-white underline decoration-white/70 hover:decoration-white"
+                  : "text-sky-400 hover:text-sky-300"
+              }
+            />
 
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
