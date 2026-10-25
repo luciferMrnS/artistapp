@@ -107,6 +107,9 @@ export default async function LandingPage({
     redirect(COMMUNITY_ROUTE);
   }
 
+  const signedIn = Boolean(user);
+  const communeHref = signedIn ? COMMUNITY_ROUTE : COMMUNE_ROUTE;
+
   /* The artist edits this feed from /landing-feed. It falls back to the static
      copy in lib/landing-feed.ts when the table hasn't been created yet, and is
      re-read on every visit, so a change shows up without a redeploy. */
@@ -115,7 +118,7 @@ export default async function LandingPage({
   return (
     <LandingGreeting portraitSrc={ARTIST.portrait.src}>
       <StructuredData feed={feed} />
-      <ScrollCta />
+      <ScrollCta communityHref={communeHref} signedIn={signedIn} />
 
       <a
         href="#listen"
@@ -160,8 +163,8 @@ export default async function LandingPage({
               </ul>
 
               <div className="mt-10 flex flex-wrap items-center gap-4">
-                <Link href={COMMUNE_ROUTE} className="lp-pill">
-                  Join The Creed Community
+                <Link href={communeHref} className="lp-pill">
+                  {signedIn ? "Back to the community" : "Join The Creed Community"}
                 </Link>
               </div>
             </div>
@@ -246,8 +249,8 @@ export default async function LandingPage({
 
             <Reveal delay={120}>
               <div className="mt-11 flex flex-wrap items-center justify-center gap-4">
-                <Link href={COMMUNE_ROUTE} className="lp-pill">
-                  Join The Creed Community
+                <Link href={communeHref} className="lp-pill">
+                  {signedIn ? "Back to the community" : "Join The Creed Community"}
                 </Link>
                 <a href={`mailto:${ARTIST.email}`} className="lp-pill lp-pill-ghost">
                   <Mail className="h-3.5 w-3.5" />
@@ -294,7 +297,7 @@ export default async function LandingPage({
                 </p>
               </blockquote>
               <Link
-                href={COMMUNE_ROUTE}
+                href={communeHref}
                 className="lp-body mt-9 inline-block text-[0.95rem] underline decoration-black/20 underline-offset-[6px] transition hover:decoration-black/60"
               >
                 ...join The Creed
@@ -327,10 +330,10 @@ export default async function LandingPage({
             ))}
             <li>
               <Link
-                href={COMMUNE_ROUTE}
+                href={communeHref}
                 className="lp-ui text-[0.625rem] text-[#2e2e2e] transition hover:text-[#262626]"
               >
-                Sign in
+                {signedIn ? "Community" : "Sign in"}
               </Link>
             </li>
           </ul>

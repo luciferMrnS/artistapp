@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3, Siren, Images } from "lucide-react";
+import { Home, Bell, Mail, User, PlusSquare, LogOut, Edit3, MessageCircle, BarChart3, Siren, Images, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -9,9 +9,11 @@ import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { getCreedLastRead } from "@/lib/creed-unread";
 import { setAppBadge } from "@/lib/app-badge";
+import { LANDING_PREVIEW_URL } from "@/lib/site";
 
 const navItems = [
   { icon: Home, label: "Home", href: "/community", artistOnly: false },
+  { icon: BookOpen, label: "Blog", href: LANDING_PREVIEW_URL, artistOnly: false },
   { icon: MessageCircle, label: "Creed", href: "/fan-club", artistOnly: false },
   { icon: Bell, label: "Notifications", href: "/notifications", artistOnly: false },
   { icon: Mail, label: "Messages", href: "/messages", artistOnly: false },

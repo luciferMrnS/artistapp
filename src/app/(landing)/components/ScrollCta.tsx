@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ARTIST, COMMUNE_ROUTE } from "../content";
+import { ARTIST } from "../content";
 
 /**
  * Persistent call to action. Hidden at the top of the page (the hero already
  * carries it) and slides in once the hero has scrolled away, so the join
  * button is always one click from anywhere on a long feed.
  */
-export function ScrollCta() {
+export function ScrollCta({
+  communityHref,
+  signedIn,
+}: {
+  communityHref: string;
+  signedIn: boolean;
+}) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -47,11 +53,11 @@ export function ScrollCta() {
               Listen
             </a>
             <Link
-              href={COMMUNE_ROUTE}
+              href={communityHref}
               tabIndex={visible ? undefined : -1}
               className="lp-pill !px-6 !py-3 text-[0.5625rem] sm:!px-7 sm:text-[0.625rem]"
             >
-              Join The Creed
+              {signedIn ? "Back to community" : "Join The Creed"}
             </Link>
           </div>
         </div>
