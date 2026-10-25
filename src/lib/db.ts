@@ -1971,7 +1971,6 @@ export async function getNewsletterRecipients(): Promise<{
     .from("users")
     .select("id, email, username")
     .eq("role", "fan")
-    .eq("email_verified", true)
     .is("newsletter_opt_out_at", null)
     .order("created_at", { ascending: false })
     .limit(10000);
