@@ -1973,7 +1973,8 @@ export async function getNewsletterRecipients(): Promise<{
     .eq("role", "fan")
     .eq("email_verified", true)
     .is("newsletter_opt_out_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(10000);
 
   if (error) {
     console.error("Error fetching newsletter recipients:", error);
