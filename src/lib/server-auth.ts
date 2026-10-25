@@ -68,6 +68,39 @@ export function verifyToken(token: string): JWTPayload | null {
   }
 }
 
+interface NewsletterUnsubscribePayload {
+  userId: string;
+  purpose: "newsletter-unsubscribe";
+}
+
+export function createNewsletterUnsubscribeToken(userId: string): string {
+  return jwt.sign(
+    { userId, purpose: "newsletter-unsubscribe" },
+    JWT_SECRET,
+    { expiresIn: "365d" }
+  );
+}
+
+export function verifyNewsletterUnsubscribeToken(token: string): string | null {
+  try {
+    const payload = jwt.verify(
+      token,
+      JWT_SECRET
+    ) as Partial<NewsletterUnsubscribePayload>;
+
+    if (
+      payload.purpose !== "newsletter-unsubscribe" ||
+      typeof payload.userId !== "string"
+    ) {
+      return null;
+    }
+
+    return payload.userId;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The cookie's attributes, defined once.
  *

@@ -26,8 +26,8 @@ export function NewsletterForm() {
       if (res.ok) {
         const summary =
           data.recipients === 0
-            ? "No subscribers yet — the newsletter wasn't sent."
-            : `Delivered to ${data.sent} of ${data.recipients} subscribers${
+            ? "No registered fans yet — the newsletter wasn't sent."
+            : `Delivered to ${data.sent} of ${data.recipients} registered fans${
                 data.failed ? ` · ${data.failed} failed` : ""
               }.`;
         setResult({ ok: true, text: summary });
@@ -45,9 +45,12 @@ export function NewsletterForm() {
 
   return (
     <section className="rounded-2xl border border-border bg-zinc-900 p-5">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+      <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
         <Send className="h-5 w-5 text-primary" /> Send newsletter
       </h2>
+      <p className="mb-4 text-sm text-secondary">
+        Sends to every verified registered fan who hasn&apos;t unsubscribed.
+      </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -86,7 +89,7 @@ export function NewsletterForm() {
               <Loader2 className="h-5 w-5 animate-spin" /> Sending…
             </>
           ) : (
-            "Send to all subscribers"
+            "Send to all registered fans"
           )}
         </button>
       </form>

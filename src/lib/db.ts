@@ -1957,6 +1957,57 @@ export async function getRegisteredFans(): Promise<RegisteredFanRow[]> {
     }))
     .sort((a, b) => Number(b.subscribed) - Number(a.subscribed));
 }
+export interface NewsletterRecipient {
+  id: string;
+  email: string;
+  username: string;
+}
+
+export async function getNewsletterRecipients(): Promise<{
+  recipients: NewsletterRecipient[];
+  error?: string;
+}> {
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id, email, username")
+    .eq("role", "fan")
+    .eq("email_verified", true)
+    .is("newsletter_opt_out_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching newsletter recipients:", error);
+    return { recipients: [], error: error.message };
+  }
+
+  const seen = new Set<string>();
+  const recipients = ((data ?? []) as NewsletterRecipient[]).filter((row) => {
+    const email = row.email?.trim().toLowerCase();
+    if (!email || seen.has(email)) return false;
+    seen.add(email);
+    return true;
+  });
+
+  return { recipients };
+}
+
+export async function setNewsletterOptOut(
+  userId: string,
+  optOut: boolean
+): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ newsletter_opt_out_at: optOut ? new Date().toISOString() : null })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("Error updating newsletter preference:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
 export async function getFollowing(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("follows")
