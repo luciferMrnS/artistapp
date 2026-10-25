@@ -4,6 +4,7 @@ import { verifyToken, createNewsletterUnsubscribeToken } from "@/lib/server-auth
 import { getNewsletterRecipients } from "@/lib/db";
 import { getAppUrl } from "@/lib/supabase-auth-client";
 
+const RESEND_EMAIL_URL = "https://api.resend.com/emails";
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 const BATCH_SIZE = 100;
 const BATCH_DELAY_MS = 600;
@@ -34,6 +35,10 @@ function noReplyAddress(from: string): string | undefined {
 
   if (!domain || domain === "resend.dev") return undefined;
   return `no-reply@${domain}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -98,33 +103,69 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const from = process.env.RESEND_FROM ?? "Kendrick David <onboarding@resend.dev>";
+  const from = process.env.RESEND_FROM?.trim();
+  if (!from) {
+    return NextResponse.json(
+      {
+        error:
+          "RESEND_FROM is not set. Add it in Render as a verified Resend sender, e.g. \"Kendrick David <news@kendrickdavid.com>\".",
+      },
+      { status: 500 }
+    );
+  }
+
   const replyTo = process.env.RESEND_REPLY_TO?.trim() || noReplyAddress(from);
   const appUrl = getAppUrl();
 
+  const payloadFor = (recipient: (typeof recipients)[number]) => {
+    const unsubscribeUrl = `${appUrl}/api/newsletter/unsubscribe?token=${encodeURIComponent(
+      createNewsletterUnsubscribeToken(recipient.id)
+    )}`;
+
+    return {
+      from,
+      to: [recipient.email],
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      subject,
+      html: buildHtml(message, unsubscribeUrl),
+      text: buildText(message, unsubscribeUrl),
+      headers: {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    };
+  };
+
+  const sendOne = async (
+    email: ReturnType<typeof payloadFor>
+  ): Promise<string | null> => {
+    try {
+      const res = await fetch(RESEND_EMAIL_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(email),
+      });
+
+      if (res.ok) return null;
+
+      const detail = await res.text().catch(() => "");
+      return `Resend ${res.status}: ${detail.slice(0, 300)}`;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Network error";
+    }
+  };
+
   let sent = 0;
   let failed = 0;
+  const errors: string[] = [];
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     const batch = recipients.slice(i, i + BATCH_SIZE);
-    const emails = batch.map((recipient) => {
-      const unsubscribeUrl = `${appUrl}/api/newsletter/unsubscribe?token=${encodeURIComponent(
-        createNewsletterUnsubscribeToken(recipient.id)
-      )}`;
-
-      return {
-        from,
-        to: [recipient.email],
-        ...(replyTo ? { reply_to: replyTo } : {}),
-        subject,
-        html: buildHtml(message, unsubscribeUrl),
-        text: buildText(message, unsubscribeUrl),
-        headers: {
-          "List-Unsubscribe": `<${unsubscribeUrl}>`,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      };
-    });
+    const emails = batch.map(payloadFor);
+    let shouldFallBack = false;
 
     try {
       const res = await fetch(RESEND_BATCH_URL, {
@@ -137,21 +178,59 @@ export async function POST(req: NextRequest) {
       });
 
       if (res.ok) {
-        sent += batch.length;
+        const result = (await res.json().catch(() => null)) as {
+          data?: unknown[];
+        } | null;
+        const delivered = Array.isArray(result?.data)
+          ? result.data.length
+          : batch.length;
+
+        sent += delivered;
+        failed += batch.length - delivered;
+
+        if (delivered < batch.length) {
+          errors.push("Resend rejected some recipients in the batch.");
+        }
       } else {
-        failed += batch.length;
         const detail = await res.text().catch(() => "");
-        console.error("Newsletter batch failed:", res.status, detail);
+        const message = `Batch ${res.status}: ${detail.slice(0, 300)}`;
+        console.error("Newsletter batch failed:", message);
+        errors.push(message);
+        shouldFallBack = res.status === 400 || res.status === 422;
+        if (!shouldFallBack) failed += batch.length;
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Network error";
+      console.error("Newsletter batch error:", message);
+      errors.push(message);
       failed += batch.length;
-      console.error("Newsletter batch error:", error);
+    }
+
+    if (shouldFallBack) {
+      for (let j = 0; j < emails.length; j += 1) {
+        const error = await sendOne(emails[j]);
+        if (error) {
+          failed += 1;
+          errors.push(error);
+        } else {
+          sent += 1;
+        }
+
+        if (j < emails.length - 1) {
+          await sleep(BATCH_DELAY_MS);
+        }
+      }
     }
 
     if (i + BATCH_SIZE < recipients.length) {
-      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      await sleep(BATCH_DELAY_MS);
     }
   }
 
-  return NextResponse.json({ sent, failed, recipients: recipients.length });
+  return NextResponse.json({
+    sent,
+    failed,
+    recipients: recipients.length,
+    errors: [...new Set(errors)].slice(0, 3),
+  });
 }

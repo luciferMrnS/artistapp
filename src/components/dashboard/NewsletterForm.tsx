@@ -24,13 +24,27 @@ export function NewsletterForm() {
       const data = await res.json();
 
       if (res.ok) {
+        const failed = data.failed ?? 0;
+        const detail =
+          Array.isArray(data.errors) && data.errors.length
+            ? ` ${data.errors[0]}`
+            : "";
+
+        if (data.recipients > 0 && data.sent === 0 && failed > 0) {
+          setResult({
+            ok: false,
+            text: `All ${data.recipients} sends failed.${detail}`,
+          });
+          return;
+        }
+
         const summary =
           data.recipients === 0
             ? "No registered fans yet — the newsletter wasn't sent."
             : `Delivered to ${data.sent} of ${data.recipients} registered fans${
-                data.failed ? ` · ${data.failed} failed` : ""
+                failed ? ` · ${failed} failed` : ""
               }.`;
-        setResult({ ok: true, text: summary });
+        setResult({ ok: true, text: `${summary}${detail}` });
         setSubject("");
         setMessage("");
       } else {
