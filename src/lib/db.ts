@@ -134,8 +134,8 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 // Server-side client - use SERVICE_ROLE_KEY for admin operations
-const supabaseAdmin = createClient(
-  SUPABASE_URL || "https://missing-config.supabase.co",
+export const supabaseAdmin = createClient(
+  SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY || "no-key"
 );
 

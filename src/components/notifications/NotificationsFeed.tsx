@@ -46,6 +46,7 @@ function destinationFor(n: NotificationWithActor): string | null {
       ? `/post/${n.post_id}?focus=comments`
       : `/post/${n.post_id}`;
   }
+  if (n.type === "post") return "/fan-club";
   if (n.type === "follow") return "/dashboard";
   if (n.type === "mention") return "/fan-club";
   return null;

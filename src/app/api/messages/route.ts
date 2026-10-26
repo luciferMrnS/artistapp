@@ -6,6 +6,7 @@ import {
   getRecentMessages,
   findUserById,
   isUserRestricted,
+  supabaseAdmin,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/server-auth";
 import { sendCreedPushToEveryone, sendInteractionPush } from "@/lib/push";
@@ -54,6 +55,39 @@ export async function POST(req: NextRequest) {
     Promise.resolve()
       .then(() => sendCreedPushToEveryone({ exceptUserId: user.userId }))
       .catch((err) => console.error("Creed push failed:", err));
+
+    // If the artist posts in Creed, notify all fans in-app
+    Promise.resolve()
+      .then(async () => {
+        if (dbUser.role !== "artist") return;
+        try {
+          const { data: fans } = await supabaseAdmin
+            .from("users")
+            .select("id")
+            .eq("role", "fan");
+
+          if (!fans || fans.length === 0) return;
+          const now = new Date().toISOString();
+          const notifications = fans
+            .filter((f: any) => f.id !== user.userId)
+            .map((f: any) => ({
+              id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${f.id}`,
+              user_id: f.id,
+              type: "post",
+              actor_id: user.userId,
+              post_id: null,
+              read: false,
+              created_at: now,
+            }));
+
+          if (notifications.length > 0) {
+            await supabaseAdmin.from("notifications").insert(notifications);
+          }
+        } catch (err) {
+          console.error("Failed to notify fans of artist Creed post:", err);
+        }
+      })
+      .catch((err) => console.error("Artist creed post fan notification failed:", err));
 
     // @mentions / @all: notify the addressed users in-app (notifications
     // feed) and with targeted pushes. Best-effort and async — a missing
